@@ -5,3 +5,12 @@ body {
 h1 {
   font-size: 2rem;
 }
+
+.container {
+  border: 1px solid black;
+}
+
+.wrapper {
+  width: 70%;
+    margin: 0 auto;
+}
