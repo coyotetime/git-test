@@ -457,17 +457,33 @@ export async function discoverNearbyDrive(
   let overpassError: string | null = null;
 
   try {
-    const fetched = await fetchNearbyScenicPlaces({
-      origin: input.origin,
-      durationId: input.durationId,
-      vibeId: effectiveVibe,
-    });
+    // Extra deadline so a hung mirror never blocks the bearing fallback.
+    const OVERPASS_DEADLINE_MS = 12_000;
+    const fetched = await Promise.race([
+      fetchNearbyScenicPlaces({
+        origin: input.origin,
+        durationId: input.durationId,
+        vibeId: effectiveVibe,
+      }),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(
+            new Error(
+              `Overpass deadline exceeded (${OVERPASS_DEADLINE_MS}ms)`,
+            ),
+          );
+        }, OVERPASS_DEADLINE_MS);
+      }),
+    ]);
     places = fetched.places;
     placesDebug = fetched.debug;
   } catch (error) {
     overpassError =
       error instanceof Error ? error.message : 'Overpass request failed.';
-    console.log('[Scenic discovery] Overpass error — will try fallback', overpassError);
+    console.log(
+      '[Scenic discovery] Overpass error — will try fallback',
+      overpassError,
+    );
     // Do not hard-fail yet — TEMPORARY bearing fallback can still prove routing.
   }
 

@@ -59,14 +59,17 @@ export type PlacesFetchResult = {
  */
 const OVERPASS_URLS = [
   'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
 ];
-const OVERPASS_TIMEOUT_MS = 20_000;
+/** Per-mirror timeout — keep short so bearing fallback can run. */
+const OVERPASS_TIMEOUT_MS = 8_000;
+/** Hard budget across all mirrors before discovery falls back. */
+const OVERPASS_TOTAL_BUDGET_MS = 12_000;
 const MIN_DISTANCE_KM = 1;
 /** Cap useful candidates returned to discovery before OSRM. */
 const MAX_USEFUL_CANDIDATES = 30;
-const OVERPASS_OUT_LIMIT = 60;
+const OVERPASS_OUT_LIMIT = 40;
 
 type CacheEntry = {
   expiresAt: number;
@@ -345,14 +348,16 @@ export async function fetchNearbyScenicPlaces(
 
   const window = getDiscoveryDurationWindow(input.durationId);
   const includeCafes = input.vibeId === 'coffee' || input.vibeId === 'surprise';
-  // Lite first — public mirrors often choke on broad nwr queries.
-  const queryModes: Array<'full' | 'lite'> = ['lite', 'full'];
+  // Lite only for discovery reliability — full nwr queries often 504 on public mirrors.
+  const queryModes: Array<'full' | 'lite'> = ['lite'];
+  const startedAt = Date.now();
 
   console.log('[Scenic places] Overpass search', {
     origin: input.origin,
     radiusMeters: window.searchRadiusMeters,
     durationId: input.durationId,
     vibeId: input.vibeId,
+    budgetMs: OVERPASS_TOTAL_BUDGET_MS,
   });
 
   let lastError: Error | null = null;
@@ -367,6 +372,14 @@ export async function fetchNearbyScenicPlaces(
     );
 
     for (const endpoint of OVERPASS_URLS) {
+      if (Date.now() - startedAt > OVERPASS_TOTAL_BUDGET_MS) {
+        lastError = new Error(
+          `Overpass budget exceeded (${OVERPASS_TOTAL_BUDGET_MS}ms) — falling back.`,
+        );
+        console.log('[Scenic places]', lastError.message);
+        break;
+      }
+
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), OVERPASS_TIMEOUT_MS);
 
@@ -492,6 +505,10 @@ export async function fetchNearbyScenicPlaces(
       } finally {
         clearTimeout(timeout);
       }
+    }
+
+    if (lastError?.message.includes('budget exceeded')) {
+      break;
     }
   }
 

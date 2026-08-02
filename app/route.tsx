@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -88,6 +88,8 @@ export default function RouteResultScreen() {
     useState<DiscoveryFailureReason | null>(null);
   const [discoveryDebug, setDiscoveryDebug] =
     useState<DiscoveryDebugSummary | null>(null);
+  const autoDiscoverKeyRef = useRef<string | null>(null);
+  const discoverInFlightRef = useRef(false);
 
   const drive = discoveredDrive ?? curatedDrive;
   const showCuratedEmpty =
@@ -96,11 +98,12 @@ export default function RouteResultScreen() {
     discoveryFailed && !isDiscovering && !discoveredDrive;
   const showEmpty = showCuratedEmpty || showDiscoveryEmpty;
 
-  const handleFindNearby = async () => {
-    if (!location || isDiscovering) {
+  const runNearbyDiscovery = async () => {
+    if (!location || discoverInFlightRef.current) {
       return;
     }
 
+    discoverInFlightRef.current = true;
     setIsDiscovering(true);
     setDiscoveryFailed(false);
     setDiscoveryError(null);
@@ -108,6 +111,12 @@ export default function RouteResultScreen() {
     setDiscoveryDebug(null);
 
     try {
+      console.log('[Scenic UI] starting nearby discovery', {
+        origin: location.coordinate,
+        durationId,
+        vibeId,
+      });
+
       const result = await discoverNearbyDrive({
         origin: location.coordinate,
         originLabel: label,
@@ -122,29 +131,56 @@ export default function RouteResultScreen() {
         setDiscoveryFailed(false);
         setDiscoveryReason(null);
         setDiscoveryError(null);
+        console.log('[Scenic UI] nearby discovery ok', result.drive.name);
       } else {
         setDiscoveredDrive(null);
         setDiscoveryFailed(true);
         setDiscoveryReason(result.reason);
         setDiscoveryError(result.message);
-        if (__DEV__) {
-          console.log('[Scenic UI] discovery failure', result.reason, result.message);
-          console.log(result.debug.summaryText);
-        }
+        console.log(
+          '[Scenic UI] discovery failure',
+          result.reason,
+          result.message,
+        );
+        console.log(result.debug.summaryText);
       }
     } catch (err) {
       const message =
         err instanceof Error
           ? err.message
           : 'Something went wrong while searching nearby.';
-      console.log('[Scenic UI] discovery threw', err instanceof Error ? err.message : err);
+      console.log(
+        '[Scenic UI] discovery threw',
+        err instanceof Error ? err.message : err,
+      );
       setDiscoveredDrive(null);
       setDiscoveryFailed(true);
       setDiscoveryReason('overpass_error');
       setDiscoveryError(message);
     } finally {
+      discoverInFlightRef.current = false;
       setIsDiscovering(false);
     }
+  };
+
+  // When curated matching finds nothing, automatically search nearby.
+  // Avoids leaving users stuck on the "no Scenic drive yet" screen.
+  useEffect(() => {
+    if (!unavailable || !location || isLoading || discoveredDrive) {
+      return;
+    }
+
+    const key = `${location.coordinate.latitude.toFixed(3)}|${location.coordinate.longitude.toFixed(3)}|${durationId}|${vibeId ?? 'surprise'}`;
+    if (autoDiscoverKeyRef.current === key) {
+      return;
+    }
+    autoDiscoverKeyRef.current = key;
+    void runNearbyDiscovery();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot per location/params
+  }, [unavailable, location, isLoading, durationId, vibeId, discoveredDrive]);
+
+  const handleFindNearby = () => {
+    void runNearbyDiscovery();
   };
 
   const emptyTitle = showDiscoveryEmpty
@@ -202,16 +238,10 @@ export default function RouteResultScreen() {
           primaryLabel={
             showDiscoveryEmpty ? 'Try again' : 'Find something nearby'
           }
-          onPrimaryPress={() => {
-            void handleFindNearby();
-          }}
+          onPrimaryPress={handleFindNearby}
           secondaryLabel="Choose a longer duration"
           onSecondaryPress={() => router.back()}
-          debugPanel={
-            showDiscoveryEmpty ? (
-              <DiscoveryDebugPanel debug={discoveryDebug} />
-            ) : null
-          }
+          debugPanel={<DiscoveryDebugPanel debug={discoveryDebug} />}
         />
       ) : (
         <>
