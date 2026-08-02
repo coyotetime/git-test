@@ -42,8 +42,8 @@ export default function HomeScreen() {
 
     setIsStarting(true);
     try {
-      // Refresh only if we don't already have a session location.
-      await getUserLocation();
+      // Refresh so we don't keep a Victoria fallback after permission is granted.
+      await getUserLocation({ forceRefresh: true });
       router.push({
         pathname: '/route',
         params: {
