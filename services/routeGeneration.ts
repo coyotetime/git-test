@@ -29,7 +29,7 @@ function getDistanceBand(durationId: DurationOption['id']): DistanceBand {
   switch (durationId) {
     case '30':
       // Nearby out-and-back from the user's current position.
-      return { minKm: 2, maxKm: 9, targetKm: 5 };
+      return { minKm: 2, maxKm: 10, targetKm: 5 };
     case '60':
       return { minKm: 8, maxKm: 16, targetKm: 12 };
     case '90':
