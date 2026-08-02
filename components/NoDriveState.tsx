@@ -1,23 +1,40 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { SecondaryButton } from '@/components/SecondaryButton';
 import { colors, spacing, typography } from '@/constants/theme';
 
 type NoDriveStateProps = {
-  onFindNearby?: () => void;
+  title: string;
+  body: string;
+  primaryLabel: string;
+  onPrimaryPress: () => void;
+  secondaryLabel?: string;
+  onSecondaryPress?: () => void;
+  primaryDisabled?: boolean;
 };
 
-export function NoDriveState({ onFindNearby }: NoDriveStateProps) {
+export function NoDriveState({
+  title,
+  body,
+  primaryLabel,
+  onPrimaryPress,
+  secondaryLabel,
+  onSecondaryPress,
+  primaryDisabled = false,
+}: NoDriveStateProps) {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>We don’t have a Scenic drive around here yet.</Text>
-      <Text style={styles.body}>
-        Try a longer drive, or let Scenic find something nearby.
-      </Text>
+      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.body}>{body}</Text>
       <PrimaryButton
-        label="Find something nearby"
-        onPress={onFindNearby ?? (() => {})}
+        label={primaryLabel}
+        onPress={onPrimaryPress}
+        disabled={primaryDisabled}
       />
+      {secondaryLabel && onSecondaryPress ? (
+        <SecondaryButton label={secondaryLabel} onPress={onSecondaryPress} />
+      ) : null}
     </View>
   );
 }

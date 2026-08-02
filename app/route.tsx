@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -12,6 +13,7 @@ import { BackButton } from '@/components/BackButton';
 import { NoDriveState } from '@/components/NoDriveState';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RouteMap } from '@/components/RouteMap';
+import { SearchingState } from '@/components/SearchingState';
 import { SecondaryButton } from '@/components/SecondaryButton';
 import { SectionHeading } from '@/components/SectionHeading';
 import { StopList } from '@/components/StopList';
@@ -20,6 +22,8 @@ import { DurationOption, VibeOption } from '@/constants/options';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useScenicDrive } from '@/hooks/useScenicDrive';
 import { useUserLocation } from '@/hooks/useUserLocation';
+import { discoverNearbyDrive } from '@/services/routeDiscovery';
+import { GeneratedDrive } from '@/services/routeGeneration';
 
 function asDurationId(value: string | string[] | undefined): DurationOption['id'] {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -61,7 +65,7 @@ export default function RouteResultScreen() {
   const vibeId = asVibeId(params.vibeId);
   const { location, label } = useUserLocation();
 
-  const { drive, isLoading, error, unavailable } = useScenicDrive({
+  const { drive: curatedDrive, isLoading, error, unavailable } = useScenicDrive({
     origin: location?.coordinate ?? null,
     originLabel: label,
     durationId,
@@ -69,11 +73,69 @@ export default function RouteResultScreen() {
     enabled: Boolean(location),
   });
 
-  const showNoDrive = !isLoading && !error && unavailable;
+  const [discoveredDrive, setDiscoveredDrive] = useState<GeneratedDrive | null>(
+    null,
+  );
+  const [isDiscovering, setIsDiscovering] = useState(false);
+  const [discoveryFailed, setDiscoveryFailed] = useState(false);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+
+  const drive = discoveredDrive ?? curatedDrive;
+  const showCuratedEmpty =
+    !isLoading && !error && unavailable && !discoveredDrive && !isDiscovering;
+  const showDiscoveryEmpty =
+    discoveryFailed && !isDiscovering && !discoveredDrive;
+  const showEmpty = showCuratedEmpty || showDiscoveryEmpty;
+
+  const handleFindNearby = async () => {
+    if (!location || isDiscovering) {
+      return;
+    }
+
+    setIsDiscovering(true);
+    setDiscoveryFailed(false);
+    setDiscoveryError(null);
+
+    try {
+      const result = await discoverNearbyDrive({
+        origin: location.coordinate,
+        originLabel: label,
+        durationId,
+        vibeId,
+      });
+
+      if (result.status === 'ok') {
+        setDiscoveredDrive(result.drive);
+        setDiscoveryFailed(false);
+      } else {
+        setDiscoveredDrive(null);
+        setDiscoveryFailed(true);
+      }
+    } catch (err) {
+      setDiscoveredDrive(null);
+      setDiscoveryFailed(true);
+      setDiscoveryError(
+        err instanceof Error
+          ? err.message
+          : 'Something went wrong while searching nearby.',
+      );
+    } finally {
+      setIsDiscovering(false);
+    }
+  };
+
+  const emptyTitle = showDiscoveryEmpty
+    ? `No good ${durationId}-minute drives found nearby.`
+    : 'We don’t have a Scenic drive around here yet.';
+
+  const emptyBody = showDiscoveryEmpty
+    ? discoveryError ??
+      'Try again, or choose a longer drive for a wider search.'
+    : 'Try a longer drive, or let Scenic find something nearby.';
 
   return (
     <View style={styles.screen}>
-      {!showNoDrive ? (
+      {!showEmpty && !isDiscovering ? (
         <View style={styles.mapBlock}>
           <RouteMap
             height={mapHeight}
@@ -98,8 +160,21 @@ export default function RouteResultScreen() {
         </View>
       )}
 
-      {showNoDrive ? (
-        <NoDriveState />
+      {isDiscovering ? (
+        <SearchingState />
+      ) : showEmpty ? (
+        <NoDriveState
+          title={emptyTitle}
+          body={emptyBody}
+          primaryLabel={
+            showDiscoveryEmpty ? 'Try again' : 'Find something nearby'
+          }
+          onPrimaryPress={() => {
+            void handleFindNearby();
+          }}
+          secondaryLabel="Choose a longer duration"
+          onSecondaryPress={() => router.back()}
+        />
       ) : (
         <>
           <ScrollView

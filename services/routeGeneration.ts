@@ -1,9 +1,8 @@
+import { ScenicDestination } from '@/constants/destinations';
+import { getDurationWindow } from '@/constants/duration';
 import { DurationOption, VibeOption } from '@/constants/options';
 import { LatLng, RouteStop, ScenicRoute } from '@/constants/routes';
-import {
-  SCENIC_WAYPOINTS,
-  ScenicWaypoint,
-} from '@/constants/waypoints';
+import { SCENIC_WAYPOINTS } from '@/constants/waypoints';
 import { distanceKm } from '@/services/geo';
 import { DrivingRouteResult, fetchDrivingRoute } from '@/services/routing';
 
@@ -16,65 +15,24 @@ export type GenerateDriveInput = {
 
 export type GeneratedDrive = ScenicRoute & {
   polyline: LatLng[];
-  waypoint: ScenicWaypoint;
+  waypoint: ScenicDestination;
 };
 
 export type GenerateDriveResult =
   | { status: 'ok'; drive: GeneratedDrive }
   | { status: 'none' };
 
-type DurationWindow = {
-  targetMinutes: number;
-  minMinutes: number;
-  maxMinutes: number;
-  /** Preliminary Haversine one-way distance filter, in km. */
-  maxStraightLineKm: number;
-};
-
 type CandidateEvaluation = {
-  waypoint: ScenicWaypoint;
+  waypoint: ScenicDestination;
   straightLineKm: number;
   routed: DrivingRouteResult;
   durationMinutes: number;
 };
 
-function getDurationWindow(durationId: DurationOption['id']): DurationWindow {
-  switch (durationId) {
-    case '30':
-      return {
-        targetMinutes: 30,
-        minMinutes: 20,
-        maxMinutes: 40,
-        maxStraightLineKm: 15,
-      };
-    case '60':
-      return {
-        targetMinutes: 60,
-        minMinutes: 45,
-        maxMinutes: 75,
-        maxStraightLineKm: 30,
-      };
-    case '90':
-      return {
-        targetMinutes: 90,
-        minMinutes: 70,
-        maxMinutes: 110,
-        maxStraightLineKm: 50,
-      };
-    default:
-      return {
-        targetMinutes: 30,
-        minMinutes: 20,
-        maxMinutes: 40,
-        maxStraightLineKm: 15,
-      };
-  }
-}
-
 function buildStops(
   origin: LatLng,
   originLabel: string,
-  waypoint: ScenicWaypoint,
+  waypoint: ScenicDestination,
 ): RouteStop[] {
   return [
     {
@@ -96,7 +54,7 @@ function buildStops(
 }
 
 function matchesSelectedVibe(
-  waypoint: ScenicWaypoint,
+  waypoint: ScenicDestination,
   vibeId: VibeOption['id'] | null,
 ): boolean {
   if (!vibeId || vibeId === 'surprise') {
@@ -106,10 +64,10 @@ function matchesSelectedVibe(
 }
 
 /**
- * Builds a scenic out-and-back drive from the user's current location.
+ * Builds a scenic out-and-back drive from curated destinations near the user.
  *
  * Selected duration is a hard constraint. Faraway curated destinations
- * (e.g. Victoria waypoints from Parksville) are never returned.
+ * are never returned.
  */
 export async function generateScenicDrive(
   input: GenerateDriveInput,
@@ -138,7 +96,6 @@ export async function generateScenicDrive(
     ),
   );
 
-  // Vibe is secondary, but we never expand geography to satisfy it.
   const vibeFiltered =
     effectiveVibe === 'surprise'
       ? distanceFiltered
@@ -205,7 +162,6 @@ export async function generateScenicDrive(
     return { status: 'none' };
   }
 
-  // Prefer closest to target duration; break ties with nearer straight-line distance.
   evaluations.sort((a, b) => {
     const durationDelta =
       Math.abs(a.durationMinutes - window.targetMinutes) -
@@ -216,7 +172,6 @@ export async function generateScenicDrive(
     return a.straightLineKm - b.straightLineKm;
   });
 
-  // Light variety: if several are nearly equally close to target, pick among the top ties.
   const bestDelta = Math.abs(
     evaluations[0].durationMinutes - window.targetMinutes,
   );
@@ -237,11 +192,6 @@ export async function generateScenicDrive(
   );
 
   const stops = buildStops(input.origin, input.originLabel, chosen.waypoint);
-  const durationMinutes = Math.max(1, Math.round(chosen.durationMinutes));
-  const distanceKmValue = Math.max(
-    0.1,
-    Math.round(chosen.routed.distanceMeters / 100) / 10,
-  );
 
   return {
     status: 'ok',
@@ -253,8 +203,11 @@ export async function generateScenicDrive(
         effectiveVibe !== 'surprise'
           ? [effectiveVibe]
           : chosen.waypoint.vibes.slice(0, 3),
-      durationMinutes,
-      distanceKm: distanceKmValue,
+      durationMinutes: Math.max(1, Math.round(chosen.durationMinutes)),
+      distanceKm: Math.max(
+        0.1,
+        Math.round(chosen.routed.distanceMeters / 100) / 10,
+      ),
       stops,
       polyline: chosen.routed.geometry,
       waypoint: chosen.waypoint,
