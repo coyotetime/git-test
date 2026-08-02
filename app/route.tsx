@@ -9,8 +9,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BackButton } from '@/components/BackButton';
-import { MapPlaceholder } from '@/components/MapPlaceholder';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { RouteMap } from '@/components/RouteMap';
 import { SecondaryButton } from '@/components/SecondaryButton';
 import { SectionHeading } from '@/components/SectionHeading';
 import { StopList } from '@/components/StopList';
@@ -27,7 +27,11 @@ export default function RouteResultScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.mapBlock}>
-        <MapPlaceholder height={mapHeight} />
+        <RouteMap
+          height={mapHeight}
+          stops={route.stops}
+          polyline={route.polyline}
+        />
         <View style={[styles.backWrap, { top: insets.top + spacing.sm }]}>
           <BackButton onPress={() => router.back()} />
         </View>
