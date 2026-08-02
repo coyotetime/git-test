@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   ScrollView,
@@ -31,7 +32,7 @@ export default function HomeScreen() {
   const [vibeId, setVibeId] = useState<VibeOption['id'] | null>(null);
 
   const handleFindDrive = () => {
-    // Placeholder for future routing / drive discovery flow.
+    router.push('/route');
   };
 
   return (

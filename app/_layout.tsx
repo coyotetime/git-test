@@ -54,9 +54,12 @@ export default function RootLayout() {
         screenOptions={{
           headerShown: false,
           contentStyle: styles.screen,
+          animation: 'fade_from_bottom',
+          animationDuration: 320,
         }}
       >
         <Stack.Screen name="index" />
+        <Stack.Screen name="route" />
       </Stack>
     </SafeAreaProvider>
   );
