@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { colors, spacing, typography } from '@/constants/theme';
 
@@ -22,8 +22,11 @@ export function SearchingState() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator color={colors.primary} size="large" />
+      <Text style={styles.meta}>{`STATUS // SCANNING`}</Text>
       <Text style={styles.title}>{MESSAGES[index]}</Text>
+      <View style={styles.barTrack}>
+        <View style={styles.barFill} />
+      </View>
       <Text style={styles.body}>
         Scenic is checking nearby places and real drive times.
       </Text>
@@ -40,17 +43,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xl,
   },
+  meta: {
+    ...typography.section,
+    color: colors.accent,
+  },
   title: {
     ...typography.heading,
-    fontSize: 28,
-    lineHeight: 34,
+    fontSize: 30,
+    lineHeight: 32,
     color: colors.text,
-    marginTop: spacing.sm,
+  },
+  barTrack: {
+    width: '100%',
+    height: 8,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  barFill: {
+    width: '62%',
+    height: '100%',
+    backgroundColor: colors.accent,
   },
   body: {
     ...typography.helper,
-    fontSize: 16,
-    lineHeight: 24,
     color: colors.textSecondary,
   },
 });

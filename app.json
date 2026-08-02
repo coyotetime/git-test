@@ -13,7 +13,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#F5F0E6",
+        "backgroundColor": "#F4F4F0",
         "foregroundImage": "./assets/images/adaptive-icon.png"
       },
       "package": "com.scenic.app"
@@ -30,7 +30,7 @@
         {
           "image": "./assets/images/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#F5F0E6"
+          "backgroundColor": "#F4F4F0"
         }
       ],
       [

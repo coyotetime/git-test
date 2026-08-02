@@ -1,11 +1,6 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
 
-import { colors, radii, shadows, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography } from '@/constants/theme';
 
 type PrimaryButtonProps = {
   label: string;
@@ -13,58 +8,53 @@ type PrimaryButtonProps = {
   disabled?: boolean;
 };
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
 export function PrimaryButton({
   label,
   onPress,
   disabled = false,
 }: PrimaryButtonProps) {
-  const scale = useSharedValue(1);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
   return (
-    <AnimatedPressable
+    <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      onPressIn={() => {
-        if (!disabled) {
-          scale.value = withTiming(0.985, { duration: 120 });
-        }
-      }}
-      onPressOut={() => {
-        scale.value = withTiming(1, { duration: 140 });
-      }}
-      style={[
+      style={({ pressed }) => [
         styles.button,
         disabled && styles.buttonDisabled,
-        animatedStyle,
+        pressed && !disabled && styles.buttonPressed,
       ]}
     >
+      <Text style={styles.prefix}>{`>>>`}</Text>
       <Text style={styles.label}>{label}</Text>
-    </AnimatedPressable>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'stretch',
-    minHeight: 64,
-    paddingVertical: spacing.md + 2,
+    gap: spacing.sm,
+    minHeight: 60,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
-    borderRadius: radii.lg,
     backgroundColor: colors.primary,
-    ...shadows.button,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  buttonPressed: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   buttonDisabled: {
-    opacity: 0.45,
+    opacity: 0.35,
+  },
+  prefix: {
+    ...typography.button,
+    color: colors.accent,
   },
   label: {
     ...typography.button,

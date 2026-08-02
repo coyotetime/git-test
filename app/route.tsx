@@ -183,15 +183,17 @@ export default function RouteResultScreen() {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.details}>
+              <Text style={styles.meta}>{`ROUTE // RESULT`}</Text>
               <Text style={styles.title}>
                 {drive?.name ?? 'Finding your drive'}
               </Text>
-              <Text style={styles.meta}>
+              <View style={styles.accentRule} />
+              <Text style={styles.stats}>
                 {drive
-                  ? `${drive.durationMinutes} min · ${drive.distanceKm} km`
+                  ? `${drive.durationMinutes} MIN · ${drive.distanceKm} KM`
                   : isLoading
-                    ? 'Calculating route…'
-                    : 'Route details unavailable'}
+                    ? 'CALCULATING ROUTE…'
+                    : 'ROUTE DETAILS UNAVAILABLE'}
               </Text>
 
               {drive ? <VibeTagList vibeIds={drive.vibeIds} /> : null}
@@ -239,11 +241,14 @@ const styles = StyleSheet.create({
   },
   noDriveHeader: {
     paddingHorizontal: spacing.lg,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.border,
+    paddingBottom: spacing.sm,
   },
   backWrap: {
     position: 'absolute',
     left: spacing.lg,
-    zIndex: 2,
+    zIndex: 3,
   },
   scroll: {
     flex: 1,
@@ -257,21 +262,28 @@ const styles = StyleSheet.create({
   details: {
     gap: spacing.md,
   },
+  meta: {
+    ...typography.section,
+    color: colors.accent,
+  },
   title: {
     ...typography.heading,
     fontSize: 32,
-    lineHeight: 38,
+    lineHeight: 34,
     color: colors.text,
   },
-  meta: {
+  accentRule: {
+    height: 4,
+    width: 56,
+    backgroundColor: colors.accent,
+  },
+  stats: {
     ...typography.section,
     color: colors.textSecondary,
   },
   description: {
     ...typography.helper,
     color: colors.textSecondary,
-    fontSize: 16,
-    lineHeight: 24,
   },
   stopsSection: {
     gap: spacing.md,
@@ -281,7 +293,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     gap: spacing.xs,
     backgroundColor: colors.background,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(28, 26, 23, 0.06)',
+    borderTopWidth: 2,
+    borderTopColor: colors.border,
   },
 });

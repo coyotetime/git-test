@@ -15,7 +15,7 @@ import MapView, {
 
 import { WaypointMarker } from '@/components/WaypointMarker';
 import { LatLng, RouteStop } from '@/constants/routes';
-import { colors, radii, shadows, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography } from '@/constants/theme';
 
 type RouteMapProps = {
   height: number;
@@ -64,7 +64,10 @@ export function RouteMap({
     return [{ latitude: 49.0, longitude: -123.8 }];
   }, [anchor, stops]);
   const initialRegion = useMemo(
-    () => getInitialRegion(polyline && polyline.length > 0 ? polyline : fallbackPoints),
+    () =>
+      getInitialRegion(
+        polyline && polyline.length > 0 ? polyline : fallbackPoints,
+      ),
     [fallbackPoints, polyline],
   );
 
@@ -96,7 +99,10 @@ export function RouteMap({
   }, [polyline]);
 
   return (
-    <View style={[styles.container, { height }, shadows.card]}>
+    <View style={[styles.container, { height }]}>
+      <View style={styles.frame}>
+        <Text style={styles.frameLabel}>{`+-- MAP / FIELD --+`}</Text>
+      </View>
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFill}
@@ -120,10 +126,10 @@ export function RouteMap({
         {polyline ? (
           <Polyline
             coordinates={polyline}
-            strokeColor={colors.primary}
+            strokeColor={colors.accent}
             strokeWidth={4}
-            lineCap="round"
-            lineJoin="round"
+            lineCap="butt"
+            lineJoin="miter"
           />
         ) : null}
 
@@ -142,14 +148,14 @@ export function RouteMap({
 
       {isLoading ? (
         <View style={styles.overlay} pointerEvents="none">
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.overlayText}>Mapping your drive…</Text>
+          <ActivityIndicator color={colors.accent} />
+          <Text style={styles.overlayText}>{`STATUS // MAPPING`}</Text>
         </View>
       ) : null}
 
       {error ? (
         <View style={styles.overlay}>
-          <Text style={styles.errorTitle}>Route unavailable</Text>
+          <Text style={styles.errorTitle}>{`ERR / ROUTE`}</Text>
           <Text style={styles.errorBody}>{error}</Text>
         </View>
       ) : null}
@@ -161,9 +167,25 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     overflow: 'hidden',
-    backgroundColor: '#DCE3D8',
-    borderBottomLeftRadius: radii.xl,
-    borderBottomRightRadius: radii.xl,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.border,
+  },
+  frame: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 2,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.background,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.border,
+  },
+  frameLabel: {
+    ...typography.section,
+    color: colors.text,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
@@ -171,7 +193,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
-    backgroundColor: 'rgba(245, 240, 230, 0.72)',
+    backgroundColor: 'rgba(244, 244, 240, 0.88)',
   },
   overlayText: {
     ...typography.helper,
@@ -179,7 +201,7 @@ const styles = StyleSheet.create({
   },
   errorTitle: {
     ...typography.section,
-    color: colors.primary,
+    color: colors.accent,
     textAlign: 'center',
   },
   errorBody: {

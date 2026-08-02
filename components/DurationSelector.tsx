@@ -1,13 +1,13 @@
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { useEffect } from 'react';
 
 import { DurationOption } from '@/constants/options';
-import { colors, radii, shadows, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography } from '@/constants/theme';
 import { selectionHaptic } from '@/utils/haptics';
 
 type DurationSelectorProps = {
@@ -23,16 +23,13 @@ type DurationCardProps = {
 };
 
 function DurationCard({ option, selected, onSelect }: DurationCardProps) {
-  const scale = useSharedValue(selected ? 1.02 : 1);
-  const opacity = useSharedValue(selected ? 1 : 0.92);
+  const opacity = useSharedValue(selected ? 1 : 0.88);
 
   useEffect(() => {
-    scale.value = withTiming(selected ? 1.02 : 1, { duration: 180 });
-    opacity.value = withTiming(selected ? 1 : 0.92, { duration: 180 });
-  }, [opacity, scale, selected]);
+    opacity.value = withTiming(selected ? 1 : 0.88, { duration: 120 });
+  }, [opacity, selected]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
     opacity: opacity.value,
   }));
 
@@ -87,7 +84,10 @@ export function DurationSelector({
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: 2,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: colors.border,
   },
   cardWrap: {
     flex: 1,
@@ -95,34 +95,30 @@ const styles = StyleSheet.create({
   card: {
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 132,
+    minHeight: 128,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.xl,
-    backgroundColor: colors.surface,
-    ...shadows.card,
+    backgroundColor: colors.background,
   },
   cardSelected: {
-    backgroundColor: colors.primary,
-    ...shadows.selected,
+    backgroundColor: colors.accent,
   },
   cardPressed: {
-    opacity: 0.94,
+    opacity: 0.9,
   },
   value: {
     ...typography.durationValue,
-    color: colors.primary,
+    color: colors.text,
   },
   valueSelected: {
-    color: colors.textOnPrimary,
+    color: colors.background,
   },
   unit: {
     ...typography.durationUnit,
-    marginTop: 4,
+    marginTop: 6,
     color: colors.textSecondary,
-    textTransform: 'uppercase',
   },
   unitSelected: {
-    color: 'rgba(255, 253, 248, 0.78)',
+    color: colors.background,
   },
 });

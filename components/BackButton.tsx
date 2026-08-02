@@ -1,7 +1,6 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 
-import { colors, radii, shadows } from '@/constants/theme';
+import { colors, typography } from '@/constants/theme';
 
 type BackButtonProps = {
   onPress: () => void;
@@ -15,23 +14,27 @@ export function BackButton({ onPress }: BackButtonProps) {
       onPress={onPress}
       style={({ pressed }) => [styles.button, pressed && styles.pressed]}
     >
-      <Ionicons name="chevron-back" size={22} color={colors.primary} />
+      <Text style={styles.label}>{`\\\\ BACK`}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
-    width: 42,
-    height: 42,
-    borderRadius: radii.pill,
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
-    ...shadows.card,
+    backgroundColor: colors.background,
+    borderWidth: 2,
+    borderColor: colors.border,
   },
   pressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.97 }],
+    backgroundColor: colors.accent,
+  },
+  label: {
+    ...typography.section,
+    color: colors.text,
   },
 });

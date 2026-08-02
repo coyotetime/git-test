@@ -1,8 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { VIBE_OPTIONS, VibeOption } from '@/constants/options';
-import { colors, radii, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography } from '@/constants/theme';
 
 type VibeTagListProps = {
   vibeIds: VibeOption['id'][];
@@ -17,8 +16,7 @@ export function VibeTagList({ vibeIds }: VibeTagListProps) {
     <View style={styles.wrap}>
       {vibes.map((vibe) => (
         <View key={vibe.id} style={styles.tag}>
-          <Ionicons name={vibe.icon} size={14} color={colors.primary} />
-          <Text style={styles.label}>{vibe.label}</Text>
+          <Text style={styles.label}>{`< ${vibe.label} >`}</Text>
         </View>
       ))}
     </View>
@@ -29,19 +27,17 @@ const styles = StyleSheet.create({
   wrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   tag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
     paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: radii.pill,
-    backgroundColor: colors.primaryMuted,
+    paddingHorizontal: 10,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.border,
   },
   label: {
     ...typography.chip,
-    color: colors.primary,
+    color: colors.text,
   },
 });

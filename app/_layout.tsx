@@ -1,12 +1,8 @@
+import { ArchivoBlack_400Regular } from '@expo-google-fonts/archivo-black';
 import {
-  Fraunces_500Medium,
-  Fraunces_600SemiBold,
-} from '@expo-google-fonts/fraunces';
-import {
-  SourceSans3_400Regular,
-  SourceSans3_600SemiBold,
-  SourceSans3_700Bold,
-} from '@expo-google-fonts/source-sans-3';
+  JetBrainsMono_400Regular,
+  JetBrainsMono_500Medium,
+} from '@expo-google-fonts/jetbrains-mono';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -24,11 +20,9 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
-    Fraunces_500Medium,
-    Fraunces_600SemiBold,
-    SourceSans3_400Regular,
-    SourceSans3_600SemiBold,
-    SourceSans3_700Bold,
+    ArchivoBlack_400Regular,
+    JetBrainsMono_400Regular,
+    JetBrainsMono_500Medium,
   });
 
   useEffect(() => {
@@ -55,7 +49,7 @@ export default function RootLayout() {
           headerShown: false,
           contentStyle: styles.screen,
           animation: 'fade_from_bottom',
-          animationDuration: 320,
+          animationDuration: 240,
         }}
       >
         <Stack.Screen name="index" />

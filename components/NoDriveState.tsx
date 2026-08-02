@@ -25,7 +25,9 @@ export function NoDriveState({
 }: NoDriveStateProps) {
   return (
     <View style={styles.container}>
+      <Text style={styles.meta}>{`REV / NO-ROUTE`}</Text>
       <Text style={styles.title}>{title}</Text>
+      <View style={styles.rule} />
       <Text style={styles.body}>{body}</Text>
       <PrimaryButton
         label={primaryLabel}
@@ -47,16 +49,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xl,
   },
+  meta: {
+    ...typography.section,
+    color: colors.accent,
+  },
   title: {
     ...typography.heading,
-    fontSize: 28,
+    fontSize: 32,
     lineHeight: 34,
     color: colors.text,
   },
+  rule: {
+    height: 4,
+    backgroundColor: colors.accent,
+    marginVertical: spacing.xs,
+  },
   body: {
     ...typography.helper,
-    fontSize: 16,
-    lineHeight: 24,
     color: colors.textSecondary,
     marginBottom: spacing.sm,
   },

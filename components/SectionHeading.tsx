@@ -7,7 +7,7 @@ type SectionHeadingProps = {
 };
 
 export function SectionHeading({ children }: SectionHeadingProps) {
-  return <Text style={styles.heading}>{children}</Text>;
+  return <Text style={styles.heading}>{`[ ${children} ]`}</Text>;
 }
 
 const styles = StyleSheet.create({

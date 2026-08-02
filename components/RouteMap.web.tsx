@@ -1,7 +1,7 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { LatLng, RouteStop } from '@/constants/routes';
-import { colors, radii, shadows, spacing, typography } from '@/constants/theme';
+import { colors, spacing, typography } from '@/constants/theme';
 
 type RouteMapProps = {
   height: number;
@@ -19,17 +19,21 @@ export function RouteMap({
   error = null,
 }: RouteMapProps) {
   return (
-    <View style={[styles.container, { height }, shadows.card]}>
+    <View style={[styles.container, { height }]}>
+      <View style={styles.frame}>
+        <Text style={styles.frameLabel}>{`+-- MAP / FIELD --+`}</Text>
+      </View>
+
       {isLoading ? (
         <View style={styles.overlay}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.overlayText}>Mapping your drive…</Text>
+          <ActivityIndicator color={colors.accent} />
+          <Text style={styles.overlayText}>{`STATUS // MAPPING`}</Text>
         </View>
       ) : null}
 
       {error ? (
         <View style={styles.overlay}>
-          <Text style={styles.errorTitle}>Route unavailable</Text>
+          <Text style={styles.errorTitle}>{`ERR / ROUTE`}</Text>
           <Text style={styles.errorBody}>{error}</Text>
         </View>
       ) : null}
@@ -37,8 +41,14 @@ export function RouteMap({
       {!isLoading && !error && polyline ? (
         <View style={styles.overlay}>
           <Text style={styles.overlayText}>
-            Drive mapped · {polyline.length} points
+            {`DRIVE MAPPED · ${polyline.length} PTS`}
           </Text>
+        </View>
+      ) : null}
+
+      {!isLoading && !error && !polyline ? (
+        <View style={styles.overlay}>
+          <Text style={styles.overlayText}>{`RENDER TARGET / WEB`}</Text>
         </View>
       ) : null}
     </View>
@@ -49,9 +59,20 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     overflow: 'hidden',
-    backgroundColor: '#D5DED4',
-    borderBottomLeftRadius: radii.xl,
-    borderBottomRightRadius: radii.xl,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.border,
+  },
+  frame: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.background,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.border,
+  },
+  frameLabel: {
+    ...typography.section,
+    color: colors.text,
   },
   overlay: {
     flex: 1,
@@ -67,7 +88,7 @@ const styles = StyleSheet.create({
   },
   errorTitle: {
     ...typography.section,
-    color: colors.primary,
+    color: colors.accent,
     textAlign: 'center',
   },
   errorBody: {

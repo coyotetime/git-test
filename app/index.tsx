@@ -42,7 +42,6 @@ export default function HomeScreen() {
 
     setIsStarting(true);
     try {
-      // Refresh so we don't keep a Victoria fallback after permission is granted.
       await getUserLocation({ forceRefresh: true });
       router.push({
         pathname: '/route',
@@ -70,13 +69,19 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         bounces
       >
+        <View style={styles.metaRow}>
+          <Text style={styles.meta}>{`LOC // ${locationLabel}`}</Text>
+          <Text style={styles.meta}>{`UNIT / D-01`}</Text>
+        </View>
+
         <View style={styles.header}>
-          <Text style={styles.location}>{locationLabel}</Text>
           <Text style={styles.brand}>Scenic</Text>
+          <View style={styles.accentRule} />
           <Text style={styles.heading}>Where do you feel like going?</Text>
         </View>
 
         <View style={styles.durationSection}>
+          <Text style={styles.sectionMeta}>{`[ DURATION SELECT ]`}</Text>
           <DurationSelector
             options={DURATION_OPTIONS}
             selectedId={durationId}
@@ -119,26 +124,42 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: spacing.lg,
   },
-  header: {
-    gap: spacing.sm,
+  metaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.border,
+    paddingBottom: spacing.sm,
   },
-  location: {
+  meta: {
     ...typography.location,
     color: colors.textSecondary,
-    marginBottom: 2,
+    flexShrink: 1,
+  },
+  header: {
+    gap: spacing.md,
   },
   brand: {
     ...typography.brand,
-    color: colors.primary,
+    color: colors.text,
+  },
+  accentRule: {
+    height: 6,
+    width: 72,
+    backgroundColor: colors.accent,
   },
   heading: {
     ...typography.heading,
     color: colors.text,
-    maxWidth: 300,
-    marginTop: 2,
+    maxWidth: 340,
   },
   durationSection: {
-    marginTop: spacing.xs,
+    gap: spacing.sm,
+  },
+  sectionMeta: {
+    ...typography.section,
+    color: colors.accent,
   },
   vibeSection: {
     gap: spacing.md,
@@ -146,7 +167,6 @@ const styles = StyleSheet.create({
   helper: {
     ...typography.helper,
     color: colors.textSecondary,
-    marginTop: 2,
   },
   cta: {
     marginTop: 'auto',

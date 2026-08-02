@@ -10,56 +10,39 @@ type StopListProps = {
 export function StopList({ stops }: StopListProps) {
   return (
     <View style={styles.list}>
-      {stops.map((stop, index) => {
-        const isLast = index === stops.length - 1;
-
-        return (
-          <View key={stop.id} style={styles.row}>
-            <View style={styles.rail}>
-              <View style={styles.dot} />
-              {!isLast && <View style={styles.line} />}
-            </View>
-            <Text style={styles.name}>{stop.name}</Text>
-          </View>
-        );
-      })}
+      {stops.map((stop, index) => (
+        <View key={stop.id} style={styles.row}>
+          <Text style={styles.index}>{String(index + 1).padStart(2, '0')}</Text>
+          <Text style={styles.name}>{stop.name}</Text>
+        </View>
+      ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   list: {
-    gap: 0,
+    borderWidth: 2,
+    borderColor: colors.border,
   },
   row: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    minHeight: 44,
-    gap: spacing.md,
-  },
-  rail: {
-    width: 16,
     alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 48,
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.background,
   },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginTop: 5,
-    backgroundColor: colors.primary,
-  },
-  line: {
-    flex: 1,
-    width: 2,
-    marginTop: 4,
-    marginBottom: -4,
-    backgroundColor: colors.primaryMuted,
+  index: {
+    ...typography.section,
+    color: colors.accent,
   },
   name: {
     ...typography.helper,
-    fontFamily: 'SourceSans3_600SemiBold',
     color: colors.text,
-    paddingTop: 2,
-    paddingBottom: spacing.md,
+    flex: 1,
+    paddingVertical: spacing.sm,
   },
 });
