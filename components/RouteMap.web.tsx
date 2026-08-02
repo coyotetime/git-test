@@ -7,6 +7,7 @@ type RouteMapProps = {
   height: number;
   stops: RouteStop[];
   polyline: LatLng[] | null;
+  anchor?: LatLng | null;
   isLoading?: boolean;
   error?: string | null;
 };

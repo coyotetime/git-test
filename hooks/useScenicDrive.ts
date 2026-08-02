@@ -19,6 +19,7 @@ type ScenicDriveState = {
   drive: GeneratedDrive | null;
   isLoading: boolean;
   error: string | null;
+  unavailable: boolean;
 };
 
 export function useScenicDrive({
@@ -31,6 +32,7 @@ export function useScenicDrive({
   const [drive, setDrive] = useState<GeneratedDrive | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
     if (!enabled || !origin) {
@@ -43,18 +45,28 @@ export function useScenicDrive({
     async function load() {
       setIsLoading(true);
       setError(null);
+      setUnavailable(false);
       setDrive(null);
 
       try {
-        const generated = await generateScenicDrive({
+        const result = await generateScenicDrive({
           origin: originCoordinate,
           originLabel,
           durationId,
           vibeId,
         });
-        if (!cancelled) {
-          setDrive(generated);
+
+        if (cancelled) {
+          return;
         }
+
+        if (result.status === 'none') {
+          setUnavailable(true);
+          setDrive(null);
+          return;
+        }
+
+        setDrive(result.drive);
       } catch {
         if (!cancelled) {
           setError(
@@ -75,5 +87,5 @@ export function useScenicDrive({
     };
   }, [enabled, origin, originLabel, durationId, vibeId]);
 
-  return { drive, isLoading, error };
+  return { drive, isLoading, error, unavailable };
 }

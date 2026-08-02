@@ -14,7 +14,6 @@ import MapView, {
 } from 'react-native-maps';
 
 import { WaypointMarker } from '@/components/WaypointMarker';
-import { FALLBACK_COORDINATE } from '@/constants/location';
 import { LatLng, RouteStop } from '@/constants/routes';
 import { colors, radii, shadows, spacing, typography } from '@/constants/theme';
 
@@ -22,6 +21,8 @@ type RouteMapProps = {
   height: number;
   stops: RouteStop[];
   polyline: LatLng[] | null;
+  /** Used for the initial camera when stops/polyline are not ready yet. */
+  anchor?: LatLng | null;
   isLoading?: boolean;
   error?: string | null;
 };
@@ -46,19 +47,22 @@ export function RouteMap({
   height,
   stops,
   polyline,
+  anchor = null,
   isLoading = false,
   error = null,
 }: RouteMapProps) {
   const mapRef = useRef<MapView>(null);
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
 
-  const fallbackPoints = useMemo(
-    () =>
-      stops.length > 0
-        ? stops.map((stop) => stop.coordinate)
-        : [FALLBACK_COORDINATE],
-    [stops],
-  );
+  const fallbackPoints = useMemo(() => {
+    if (stops.length > 0) {
+      return stops.map((stop) => stop.coordinate);
+    }
+    if (anchor) {
+      return [anchor];
+    }
+    return [{ latitude: 49.0, longitude: -123.8 }];
+  }, [anchor, stops]);
   const initialRegion = useMemo(
     () => getInitialRegion(polyline && polyline.length > 0 ? polyline : fallbackPoints),
     [fallbackPoints, polyline],

@@ -9,6 +9,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BackButton } from '@/components/BackButton';
+import { NoDriveState } from '@/components/NoDriveState';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RouteMap } from '@/components/RouteMap';
 import { SecondaryButton } from '@/components/SecondaryButton';
@@ -60,7 +61,7 @@ export default function RouteResultScreen() {
   const vibeId = asVibeId(params.vibeId);
   const { location, label } = useUserLocation();
 
-  const { drive, isLoading, error } = useScenicDrive({
+  const { drive, isLoading, error, unavailable } = useScenicDrive({
     origin: location?.coordinate ?? null,
     originLabel: label,
     durationId,
@@ -68,64 +69,87 @@ export default function RouteResultScreen() {
     enabled: Boolean(location),
   });
 
-  const stops = drive?.stops ?? [];
-  const title = drive?.name ?? 'Finding your drive';
-  const description =
-    drive?.description ??
-    'Matching a scenic loop to your time, mood, and starting point.';
+  const showNoDrive = !isLoading && !error && unavailable;
 
   return (
     <View style={styles.screen}>
-      <View style={styles.mapBlock}>
-        <RouteMap
-          height={mapHeight}
-          stops={stops}
-          polyline={drive?.polyline ?? null}
-          isLoading={isLoading || !location}
-          error={error}
-        />
-        <View style={[styles.backWrap, { top: insets.top + spacing.sm }]}>
+      {!showNoDrive ? (
+        <View style={styles.mapBlock}>
+          <RouteMap
+            height={mapHeight}
+            stops={drive?.stops ?? []}
+            polyline={drive?.polyline ?? null}
+            anchor={location?.coordinate ?? null}
+            isLoading={isLoading || !location}
+            error={error}
+          />
+          <View style={[styles.backWrap, { top: insets.top + spacing.sm }]}>
+            <BackButton onPress={() => router.back()} />
+          </View>
+        </View>
+      ) : (
+        <View
+          style={[
+            styles.noDriveHeader,
+            { paddingTop: insets.top + spacing.sm },
+          ]}
+        >
           <BackButton onPress={() => router.back()} />
         </View>
-      </View>
+      )}
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.details}>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.meta}>
-            {drive
-              ? `${drive.durationMinutes} min · ${drive.distanceKm} km`
-              : isLoading
-                ? 'Calculating route…'
-                : 'Route details unavailable'}
-          </Text>
+      {showNoDrive ? (
+        <NoDriveState />
+      ) : (
+        <>
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.details}>
+              <Text style={styles.title}>
+                {drive?.name ?? 'Finding your drive'}
+              </Text>
+              <Text style={styles.meta}>
+                {drive
+                  ? `${drive.durationMinutes} min · ${drive.distanceKm} km`
+                  : isLoading
+                    ? 'Calculating route…'
+                    : 'Route details unavailable'}
+              </Text>
 
-          {drive ? <VibeTagList vibeIds={drive.vibeIds} /> : null}
+              {drive ? <VibeTagList vibeIds={drive.vibeIds} /> : null}
 
-          <Text style={styles.description}>{description}</Text>
-        </View>
+              <Text style={styles.description}>
+                {drive?.description ??
+                  'Matching a scenic loop to your time, mood, and starting point.'}
+              </Text>
+            </View>
 
-        {drive ? (
-          <View style={styles.stopsSection}>
-            <SectionHeading>Along the way</SectionHeading>
-            <StopList stops={drive.stops} />
+            {drive ? (
+              <View style={styles.stopsSection}>
+                <SectionHeading>Along the way</SectionHeading>
+                <StopList stops={drive.stops} />
+              </View>
+            ) : null}
+          </ScrollView>
+
+          <View
+            style={[
+              styles.footer,
+              { paddingBottom: Math.max(insets.bottom, spacing.md) },
+            ]}
+          >
+            <PrimaryButton
+              label="Start drive"
+              onPress={() => {}}
+              disabled={!drive}
+            />
+            <SecondaryButton label="Save" onPress={() => {}} />
           </View>
-        ) : null}
-      </ScrollView>
-
-      <View
-        style={[
-          styles.footer,
-          { paddingBottom: Math.max(insets.bottom, spacing.md) },
-        ]}
-      >
-        <PrimaryButton label="Start drive" onPress={() => {}} disabled={!drive} />
-        <SecondaryButton label="Save" onPress={() => {}} />
-      </View>
+        </>
+      )}
     </View>
   );
 }
@@ -137,6 +161,9 @@ const styles = StyleSheet.create({
   },
   mapBlock: {
     position: 'relative',
+  },
+  noDriveHeader: {
+    paddingHorizontal: spacing.lg,
   },
   backWrap: {
     position: 'absolute',

@@ -5,7 +5,7 @@ import {
   ScenicWaypoint,
 } from '@/constants/waypoints';
 import { distanceKm } from '@/services/geo';
-import { fetchDrivingRoute } from '@/services/routing';
+import { DrivingRouteResult, fetchDrivingRoute } from '@/services/routing';
 
 export type GenerateDriveInput = {
   origin: LatLng;
@@ -19,87 +19,56 @@ export type GeneratedDrive = ScenicRoute & {
   waypoint: ScenicWaypoint;
 };
 
-type DistanceBand = {
-  minKm: number;
-  maxKm: number;
-  targetKm: number;
+export type GenerateDriveResult =
+  | { status: 'ok'; drive: GeneratedDrive }
+  | { status: 'none' };
+
+type DurationWindow = {
+  targetMinutes: number;
+  minMinutes: number;
+  maxMinutes: number;
+  /** Preliminary Haversine one-way distance filter, in km. */
+  maxStraightLineKm: number;
 };
 
-function getDistanceBand(durationId: DurationOption['id']): DistanceBand {
+type CandidateEvaluation = {
+  waypoint: ScenicWaypoint;
+  straightLineKm: number;
+  routed: DrivingRouteResult;
+  durationMinutes: number;
+};
+
+function getDurationWindow(durationId: DurationOption['id']): DurationWindow {
   switch (durationId) {
     case '30':
-      // Nearby out-and-back from the user's current position.
-      return { minKm: 2, maxKm: 10, targetKm: 5 };
+      return {
+        targetMinutes: 30,
+        minMinutes: 20,
+        maxMinutes: 40,
+        maxStraightLineKm: 15,
+      };
     case '60':
-      return { minKm: 8, maxKm: 16, targetKm: 12 };
+      return {
+        targetMinutes: 60,
+        minMinutes: 45,
+        maxMinutes: 75,
+        maxStraightLineKm: 30,
+      };
     case '90':
-      return { minKm: 14, maxKm: 35, targetKm: 20 };
+      return {
+        targetMinutes: 90,
+        minMinutes: 70,
+        maxMinutes: 110,
+        maxStraightLineKm: 50,
+      };
     default:
-      return { minKm: 2, maxKm: 35, targetKm: 10 };
+      return {
+        targetMinutes: 30,
+        minMinutes: 20,
+        maxMinutes: 40,
+        maxStraightLineKm: 15,
+      };
   }
-}
-
-type RankedWaypoint = {
-  waypoint: ScenicWaypoint;
-  distanceFromOriginKm: number;
-};
-
-function rankWaypoints(origin: LatLng): RankedWaypoint[] {
-  return SCENIC_WAYPOINTS.map((waypoint) => ({
-    waypoint,
-    distanceFromOriginKm: distanceKm(origin, waypoint.coordinate),
-  })).sort((a, b) => a.distanceFromOriginKm - b.distanceFromOriginKm);
-}
-
-function pickWaypoint(
-  origin: LatLng,
-  durationId: DurationOption['id'],
-  vibeId: VibeOption['id'] | null,
-): ScenicWaypoint {
-  const effectiveVibe = vibeId ?? 'surprise';
-  const band = getDistanceBand(durationId);
-  const ranked = rankWaypoints(origin);
-
-  const inBand = ranked.filter(
-    (entry) =>
-      entry.distanceFromOriginKm >= band.minKm &&
-      entry.distanceFromOriginKm <= band.maxKm,
-  );
-
-  const vibeMatched =
-    effectiveVibe === 'surprise'
-      ? inBand
-      : inBand.filter((entry) => entry.waypoint.vibes.includes(effectiveVibe));
-
-  // If the band is empty (e.g. user is far from the curated set), widen the search.
-  const pool =
-    vibeMatched.length > 0
-      ? vibeMatched
-      : inBand.length > 0
-        ? inBand
-        : effectiveVibe === 'surprise'
-          ? ranked
-          : ranked.filter((entry) =>
-              entry.waypoint.vibes.includes(effectiveVibe),
-            );
-
-  const candidates = pool.length > 0 ? pool : ranked;
-
-  if (effectiveVibe === 'surprise') {
-    return (
-      candidates[Math.floor(Math.random() * candidates.length)]?.waypoint ??
-      SCENIC_WAYPOINTS[0]
-    );
-  }
-
-  // Prefer the waypoint closest to the target one-way distance for this duration.
-  const best = [...candidates].sort(
-    (a, b) =>
-      Math.abs(a.distanceFromOriginKm - band.targetKm) -
-      Math.abs(b.distanceFromOriginKm - band.targetKm),
-  )[0];
-
-  return best?.waypoint ?? SCENIC_WAYPOINTS[0];
 }
 
 function buildStops(
@@ -126,37 +95,169 @@ function buildStops(
   ];
 }
 
+function matchesSelectedVibe(
+  waypoint: ScenicWaypoint,
+  vibeId: VibeOption['id'] | null,
+): boolean {
+  if (!vibeId || vibeId === 'surprise') {
+    return true;
+  }
+  return waypoint.vibes.includes(vibeId);
+}
+
 /**
- * Builds a simple out-and-back scenic drive:
- * current location → curated waypoint → current location.
+ * Builds a scenic out-and-back drive from the user's current location.
  *
- * Waypoint choice is based on distance from the user's origin (not downtown Victoria).
+ * Selected duration is a hard constraint. Faraway curated destinations
+ * (e.g. Victoria waypoints from Parksville) are never returned.
  */
 export async function generateScenicDrive(
   input: GenerateDriveInput,
-): Promise<GeneratedDrive> {
-  const waypoint = pickWaypoint(input.origin, input.durationId, input.vibeId);
-  const stops = buildStops(input.origin, input.originLabel, waypoint);
-  const routed = await fetchDrivingRoute(stops.map((stop) => stop.coordinate));
+): Promise<GenerateDriveResult> {
+  const window = getDurationWindow(input.durationId);
+  const effectiveVibe = input.vibeId ?? 'surprise';
 
-  const durationMinutes = Math.max(1, Math.round(routed.durationSeconds / 60));
+  console.log('[Scenic routing] origin', input.origin);
+  console.log('[Scenic routing] selected duration', input.durationId, window);
+  console.log('[Scenic routing] selected vibe', effectiveVibe);
+  console.log(
+    '[Scenic routing] candidates before distance filter',
+    SCENIC_WAYPOINTS.length,
+  );
+
+  const distanceFiltered = SCENIC_WAYPOINTS.map((waypoint) => ({
+    waypoint,
+    straightLineKm: distanceKm(input.origin, waypoint.coordinate),
+  })).filter((entry) => entry.straightLineKm <= window.maxStraightLineKm);
+
+  console.log(
+    '[Scenic routing] candidates after distance filter',
+    distanceFiltered.length,
+    distanceFiltered.map(
+      (entry) => `${entry.waypoint.id}:${entry.straightLineKm.toFixed(1)}km`,
+    ),
+  );
+
+  // Vibe is secondary, but we never expand geography to satisfy it.
+  const vibeFiltered =
+    effectiveVibe === 'surprise'
+      ? distanceFiltered
+      : distanceFiltered.filter((entry) =>
+          matchesSelectedVibe(entry.waypoint, effectiveVibe),
+        );
+
+  if (vibeFiltered.length === 0) {
+    console.log(
+      '[Scenic routing] no candidates after vibe/distance filters — none',
+    );
+    return { status: 'none' };
+  }
+
+  const evaluations: CandidateEvaluation[] = [];
+
+  for (const candidate of vibeFiltered) {
+    try {
+      const stops = buildStops(
+        input.origin,
+        input.originLabel,
+        candidate.waypoint,
+      );
+      const routed = await fetchDrivingRoute(
+        stops.map((stop) => stop.coordinate),
+      );
+      const durationMinutes = routed.durationSeconds / 60;
+
+      console.log(
+        '[Scenic routing] OSRM candidate',
+        candidate.waypoint.id,
+        `${durationMinutes.toFixed(1)} min`,
+        `${(routed.distanceMeters / 1000).toFixed(1)} km`,
+      );
+
+      if (
+        durationMinutes >= window.minMinutes &&
+        durationMinutes <= window.maxMinutes
+      ) {
+        evaluations.push({
+          waypoint: candidate.waypoint,
+          straightLineKm: candidate.straightLineKm,
+          routed,
+          durationMinutes,
+        });
+      } else {
+        console.log(
+          '[Scenic routing] discarded outside duration window',
+          candidate.waypoint.id,
+          `${durationMinutes.toFixed(1)} min`,
+        );
+      }
+    } catch (error) {
+      console.log(
+        '[Scenic routing] OSRM failed for',
+        candidate.waypoint.id,
+        error,
+      );
+    }
+  }
+
+  if (evaluations.length === 0) {
+    console.log('[Scenic routing] no duration-valid candidates — none');
+    return { status: 'none' };
+  }
+
+  // Prefer closest to target duration; break ties with nearer straight-line distance.
+  evaluations.sort((a, b) => {
+    const durationDelta =
+      Math.abs(a.durationMinutes - window.targetMinutes) -
+      Math.abs(b.durationMinutes - window.targetMinutes);
+    if (durationDelta !== 0) {
+      return durationDelta;
+    }
+    return a.straightLineKm - b.straightLineKm;
+  });
+
+  // Light variety: if several are nearly equally close to target, pick among the top ties.
+  const bestDelta = Math.abs(
+    evaluations[0].durationMinutes - window.targetMinutes,
+  );
+  const nearBest = evaluations.filter(
+    (entry) =>
+      Math.abs(entry.durationMinutes - window.targetMinutes) <= bestDelta + 2,
+  );
+  const chosen =
+    effectiveVibe === 'surprise'
+      ? nearBest[Math.floor(Math.random() * nearBest.length)] ?? evaluations[0]
+      : evaluations[0];
+
+  console.log(
+    '[Scenic routing] chosen route',
+    chosen.waypoint.id,
+    `${chosen.durationMinutes.toFixed(1)} min`,
+    `${chosen.straightLineKm.toFixed(1)} km away`,
+  );
+
+  const stops = buildStops(input.origin, input.originLabel, chosen.waypoint);
+  const durationMinutes = Math.max(1, Math.round(chosen.durationMinutes));
   const distanceKmValue = Math.max(
     0.1,
-    Math.round(routed.distanceMeters / 100) / 10,
+    Math.round(chosen.routed.distanceMeters / 100) / 10,
   );
 
   return {
-    id: `${waypoint.id}-${input.durationId}`,
-    name: waypoint.name,
-    description: waypoint.shortDescription,
-    vibeIds:
-      input.vibeId && input.vibeId !== 'surprise'
-        ? [input.vibeId]
-        : waypoint.vibes.slice(0, 3),
-    durationMinutes,
-    distanceKm: distanceKmValue,
-    stops,
-    polyline: routed.geometry,
-    waypoint,
+    status: 'ok',
+    drive: {
+      id: `${chosen.waypoint.id}-${input.durationId}`,
+      name: chosen.waypoint.name,
+      description: chosen.waypoint.shortDescription,
+      vibeIds:
+        effectiveVibe !== 'surprise'
+          ? [effectiveVibe]
+          : chosen.waypoint.vibes.slice(0, 3),
+      durationMinutes,
+      distanceKm: distanceKmValue,
+      stops,
+      polyline: chosen.routed.geometry,
+      waypoint: chosen.waypoint,
+    },
   };
 }
