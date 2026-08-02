@@ -87,7 +87,10 @@ export async function fetchDrivingRoute(
   try {
     response = await fetch(url);
   } catch (error) {
-    console.error('[Scenic routing] OSRM network failure', error);
+    console.log(
+      '[Scenic routing] OSRM network failure',
+      error instanceof Error ? error.message : error,
+    );
     throw new Error(
       `OSRM network failure: ${
         error instanceof Error ? error.message : 'unknown error'
@@ -97,7 +100,11 @@ export async function fetchDrivingRoute(
 
   if (!response.ok) {
     const bodyPreview = (await response.text()).slice(0, 240);
-    console.error('[Scenic routing] OSRM HTTP failure', response.status, bodyPreview);
+    console.log(
+      '[Scenic routing] OSRM HTTP failure',
+      response.status,
+      bodyPreview,
+    );
     throw new Error(
       `OSRM request failed (${response.status}): ${bodyPreview || 'empty body'}`,
     );
@@ -108,9 +115,9 @@ export async function fetchDrivingRoute(
   try {
     data = JSON.parse(raw) as OsrmRouteResponse;
   } catch (parseError) {
-    console.error(
+    console.log(
       '[Scenic routing] OSRM JSON parsing failed',
-      parseError,
+      parseError instanceof Error ? parseError.message : parseError,
       raw.slice(0, 400),
     );
     throw new Error(
@@ -122,7 +129,7 @@ export async function fetchDrivingRoute(
 
   const route = data.routes?.[0];
   if (data.code !== 'Ok' || !route?.geometry?.coordinates?.length) {
-    console.error('[Scenic routing] OSRM no route', data.code, data.message);
+    console.log('[Scenic routing] OSRM no route', data.code, data.message);
     throw new Error(
       data.message ??
         `OSRM returned no driving route (code=${data.code ?? 'unknown'}).`,

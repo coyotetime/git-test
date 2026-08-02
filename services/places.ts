@@ -400,10 +400,10 @@ export async function fetchNearbyScenicPlaces(
         try {
           data = JSON.parse(raw) as OverpassResponse;
         } catch (parseError) {
-          console.error(
+          console.log(
             '[Scenic places] JSON parsing failed',
             endpoint,
-            parseError,
+            parseError instanceof Error ? parseError.message : parseError,
             raw.slice(0, 400),
           );
           throw new Error(
@@ -475,24 +475,20 @@ export async function fetchNearbyScenicPlaces(
           lastError = new Error(
             `Overpass timed out after ${OVERPASS_TIMEOUT_MS}ms (${endpoint}, ${mode}).`,
           );
-          console.error(
-            '[Scenic places] Overpass timed out',
-            mode,
-            endpoint,
-            lastError,
-          );
         } else {
           lastError =
             error instanceof Error
               ? error
               : new Error('Unable to search nearby places right now.');
-          console.error(
-            '[Scenic places] Overpass failed',
-            mode,
-            endpoint,
-            lastError,
-          );
         }
+        // Use console.log (not console.error) for expected mirror failures so
+        // Expo LogBox does not interrupt discovery while we try the next mirror.
+        console.log(
+          '[Scenic places] Overpass mirror unavailable',
+          mode,
+          endpoint,
+          lastError.message,
+        );
       } finally {
         clearTimeout(timeout);
       }
@@ -511,6 +507,6 @@ export async function fetchNearbyScenicPlaces(
 
   const message =
     lastError?.message ?? 'Unable to search nearby places right now.';
-  console.error('[Scenic places] Overpass failed completely', message);
+  console.log('[Scenic places] Overpass failed completely', message);
   throw new Error(message);
 }

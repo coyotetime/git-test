@@ -400,11 +400,10 @@ async function evaluateCandidates(args: {
       routingFailures += 1;
       lastRoutingError =
         error instanceof Error ? error.message : 'Unknown OSRM failure';
-      console.error(
+      console.log(
         '[Scenic discovery] OSRM failed',
         destination.name,
         lastRoutingError,
-        error,
       );
       entries.push({
         name: destination.name,
@@ -468,7 +467,7 @@ export async function discoverNearbyDrive(
   } catch (error) {
     overpassError =
       error instanceof Error ? error.message : 'Overpass request failed.';
-    console.error('[Scenic discovery] Overpass error', overpassError, error);
+    console.log('[Scenic discovery] Overpass error — will try fallback', overpassError);
     // Do not hard-fail yet — TEMPORARY bearing fallback can still prove routing.
   }
 
