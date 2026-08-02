@@ -6,9 +6,13 @@ export type DestinationCategory =
   | 'beach'
   | 'park'
   | 'nature_reserve'
+  | 'protected_area'
   | 'lake'
+  | 'bay'
+  | 'peak'
   | 'picnic_site'
   | 'attraction'
+  | 'locality'
   | 'cafe'
   | 'scenic';
 

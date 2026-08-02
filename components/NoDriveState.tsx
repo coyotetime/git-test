@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -12,6 +13,7 @@ type NoDriveStateProps = {
   secondaryLabel?: string;
   onSecondaryPress?: () => void;
   primaryDisabled?: boolean;
+  debugPanel?: ReactNode;
 };
 
 export function NoDriveState({
@@ -22,6 +24,7 @@ export function NoDriveState({
   secondaryLabel,
   onSecondaryPress,
   primaryDisabled = false,
+  debugPanel = null,
 }: NoDriveStateProps) {
   return (
     <View style={styles.container}>
@@ -37,6 +40,7 @@ export function NoDriveState({
       {secondaryLabel && onSecondaryPress ? (
         <SecondaryButton label={secondaryLabel} onPress={onSecondaryPress} />
       ) : null}
+      {debugPanel}
     </View>
   );
 }

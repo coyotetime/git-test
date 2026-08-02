@@ -10,6 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BackButton } from '@/components/BackButton';
+import { DiscoveryDebugPanel } from '@/components/DiscoveryDebugPanel';
 import { NoDriveState } from '@/components/NoDriveState';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RouteMap } from '@/components/RouteMap';
@@ -22,7 +23,11 @@ import { DurationOption, VibeOption } from '@/constants/options';
 import { colors, spacing, typography } from '@/constants/theme';
 import { useScenicDrive } from '@/hooks/useScenicDrive';
 import { useUserLocation } from '@/hooks/useUserLocation';
-import { discoverNearbyDrive } from '@/services/routeDiscovery';
+import {
+  discoverNearbyDrive,
+  DiscoveryDebugSummary,
+  DiscoveryFailureReason,
+} from '@/services/routeDiscovery';
 import { GeneratedDrive } from '@/services/routeGeneration';
 
 function asDurationId(value: string | string[] | undefined): DurationOption['id'] {
@@ -79,6 +84,10 @@ export default function RouteResultScreen() {
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [discoveryFailed, setDiscoveryFailed] = useState(false);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+  const [discoveryReason, setDiscoveryReason] =
+    useState<DiscoveryFailureReason | null>(null);
+  const [discoveryDebug, setDiscoveryDebug] =
+    useState<DiscoveryDebugSummary | null>(null);
 
   const drive = discoveredDrive ?? curatedDrive;
   const showCuratedEmpty =
@@ -95,6 +104,8 @@ export default function RouteResultScreen() {
     setIsDiscovering(true);
     setDiscoveryFailed(false);
     setDiscoveryError(null);
+    setDiscoveryReason(null);
+    setDiscoveryDebug(null);
 
     try {
       const result = await discoverNearbyDrive({
@@ -104,33 +115,55 @@ export default function RouteResultScreen() {
         vibeId,
       });
 
+      setDiscoveryDebug(result.debug);
+
       if (result.status === 'ok') {
         setDiscoveredDrive(result.drive);
         setDiscoveryFailed(false);
+        setDiscoveryReason(null);
+        setDiscoveryError(null);
       } else {
         setDiscoveredDrive(null);
         setDiscoveryFailed(true);
+        setDiscoveryReason(result.reason);
+        setDiscoveryError(result.message);
+        if (__DEV__) {
+          console.log('[Scenic UI] discovery failure', result.reason, result.message);
+          console.log(result.debug.summaryText);
+        }
       }
     } catch (err) {
-      setDiscoveredDrive(null);
-      setDiscoveryFailed(true);
-      setDiscoveryError(
+      const message =
         err instanceof Error
           ? err.message
-          : 'Something went wrong while searching nearby.',
-      );
+          : 'Something went wrong while searching nearby.';
+      console.error('[Scenic UI] discovery threw', err);
+      setDiscoveredDrive(null);
+      setDiscoveryFailed(true);
+      setDiscoveryReason('overpass_error');
+      setDiscoveryError(message);
     } finally {
       setIsDiscovering(false);
     }
   };
 
   const emptyTitle = showDiscoveryEmpty
-    ? `No good ${durationId}-minute drives found nearby.`
+    ? discoveryError ??
+      `No good ${durationId}-minute drives found nearby.`
     : 'We don’t have a Scenic drive around here yet.';
 
   const emptyBody = showDiscoveryEmpty
-    ? discoveryError ??
-      'Try again, or choose a longer drive for a wider search.'
+    ? discoveryReason === 'routing_unreachable'
+      ? discoveryDebug?.routingError
+        ? `Routing error: ${discoveryDebug.routingError}`
+        : 'Check your connection and try again.'
+      : discoveryReason === 'overpass_error'
+        ? discoveryDebug?.overpassError
+          ? `Places error: ${discoveryDebug.overpassError}`
+          : 'Places search failed. Try again in a moment.'
+        : discoveryReason === 'no_fitting_route'
+          ? 'Try a longer duration, or try again for a different nearby match.'
+          : 'Try again, or choose a longer drive for a wider search.'
     : 'Try a longer drive, or let Scenic find something nearby.';
 
   return (
@@ -174,6 +207,11 @@ export default function RouteResultScreen() {
           }}
           secondaryLabel="Choose a longer duration"
           onSecondaryPress={() => router.back()}
+          debugPanel={
+            showDiscoveryEmpty ? (
+              <DiscoveryDebugPanel debug={discoveryDebug} />
+            ) : null
+          }
         />
       ) : (
         <>
@@ -209,6 +247,10 @@ export default function RouteResultScreen() {
                 <SectionHeading>Along the way</SectionHeading>
                 <StopList stops={drive.stops} />
               </View>
+            ) : null}
+
+            {discoveredDrive ? (
+              <DiscoveryDebugPanel debug={discoveryDebug} />
             ) : null}
           </ScrollView>
 

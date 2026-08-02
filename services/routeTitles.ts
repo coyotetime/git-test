@@ -21,13 +21,24 @@ function pickSuffix(
   if (vibeId === 'views' || category === 'viewpoint') {
     return 'Lookout';
   }
-  if (vibeId === 'forest' || category === 'nature_reserve' || category === 'lake') {
+  if (
+    vibeId === 'forest' ||
+    category === 'nature_reserve' ||
+    category === 'protected_area' ||
+    category === 'lake'
+  ) {
     return 'Escape';
   }
   if (vibeId === 'coffee' || category === 'cafe') {
     return 'Stop';
   }
-  if (category === 'park' || category === 'picnic_site') {
+  if (
+    category === 'park' ||
+    category === 'picnic_site' ||
+    category === 'bay' ||
+    category === 'peak' ||
+    category === 'locality'
+  ) {
     return 'Loop';
   }
   return 'Loop';

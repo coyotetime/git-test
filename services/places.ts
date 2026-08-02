@@ -1,11 +1,11 @@
-import { getDurationWindow } from '@/constants/duration';
+import { getDiscoveryDurationWindow } from '@/constants/duration';
 import {
   DestinationCategory,
   ScenicDestination,
 } from '@/constants/destinations';
 import { DurationOption, VibeOption } from '@/constants/options';
 import { LatLng } from '@/constants/routes';
-import { distanceKm } from '@/services/geo';
+import { distanceKm, isValidCoordinate } from '@/services/geo';
 
 /**
  * Nearby place discovery via the public OpenStreetMap Overpass API.
@@ -33,29 +33,52 @@ type FetchNearbyPlacesInput = {
   vibeId: VibeOption['id'] | null;
 };
 
+export type PlacesFetchDebug = {
+  origin: LatLng;
+  durationId: DurationOption['id'];
+  vibeId: VibeOption['id'] | null;
+  searchRadiusMeters: number;
+  maxStraightLineKm: number;
+  rawElementCount: number;
+  normalizedCount: number;
+  afterDedupeCount: number;
+  afterGeoFilterCount: number;
+  cacheHit: boolean;
+  endpointUsed: string | null;
+  overpassError: string | null;
+};
+
+export type PlacesFetchResult = {
+  places: ScenicDestination[];
+  debug: PlacesFetchDebug;
+};
+
 /**
  * Public Overpass mirrors for prototyping only.
  * Replace with a hosted/production Overpass (or another places provider) before release.
  */
 const OVERPASS_URLS = [
-  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
   'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ];
-const OVERPASS_TIMEOUT_MS = 45_000;
-const MIN_DISTANCE_KM = 2;
-const MAX_RESULTS = 50;
+const OVERPASS_TIMEOUT_MS = 20_000;
+const MIN_DISTANCE_KM = 1;
+/** Cap useful candidates returned to discovery before OSRM. */
+const MAX_USEFUL_CANDIDATES = 30;
+const OVERPASS_OUT_LIMIT = 60;
 
 type CacheEntry = {
   expiresAt: number;
   places: ScenicDestination[];
+  debug: PlacesFetchDebug;
 };
 
 const placesCache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 1000 * 60 * 12;
 
 function cacheKey(input: FetchNearbyPlacesInput): string {
-  const window = getDurationWindow(input.durationId);
-  // ~1km cache buckets so tiny location changes reuse results.
+  const window = getDiscoveryDurationWindow(input.durationId);
   const lat = input.origin.latitude.toFixed(2);
   const lng = input.origin.longitude.toFixed(2);
   return `${lat}|${lng}|${window.searchRadiusMeters}|${input.vibeId ?? 'surprise'}`;
@@ -65,40 +88,66 @@ function buildOverpassQuery(
   origin: LatLng,
   radiusMeters: number,
   includeCafes: boolean,
+  mode: 'full' | 'lite' = 'full',
 ): string {
   const { latitude, longitude } = origin;
   const around = `around:${radiusMeters},${latitude},${longitude}`;
 
   const cafeClause = includeCafes
-    ? `nwr["amenity"="cafe"]["name"](${around});`
+    ? `node["amenity"="cafe"]["name"](${around});`
     : '';
 
-  // Focused scenic categories. Names are preferred and enforced after fetch.
+  if (mode === 'lite') {
+    // Faster probe used when the full query times out on public mirrors.
+    return `
+[out:json][timeout:25];
+(
+  node["tourism"="viewpoint"](${around});
+  node["natural"="beach"](${around});
+  node["leisure"="park"]["name"](${around});
+  node["tourism"="attraction"]["name"](${around});
+  node["natural"="peak"](${around});
+  node["natural"="bay"](${around});
+  ${cafeClause}
+);
+out body ${OVERPASS_OUT_LIMIT};
+`.trim();
+  }
+
+  // Broad scenic / outdoor set. Names preferred; enforced after fetch.
   return `
-[out:json][timeout:60];
+[out:json][timeout:25];
 (
   nwr["tourism"="viewpoint"](${around});
   nwr["natural"="beach"](${around});
-  nwr["leisure"="park"]["name"](${around});
+  nwr["leisure"="park"](${around});
   nwr["leisure"="nature_reserve"](${around});
-  nwr["natural"="water"]["water"="lake"]["name"](${around});
+  nwr["boundary"="protected_area"](${around});
+  nwr["tourism"="attraction"](${around});
   nwr["tourism"="picnic_site"](${around});
-  nwr["tourism"="attraction"]["name"](${around});
+  nwr["natural"="peak"](${around});
+  nwr["natural"="bay"](${around});
+  nwr["natural"="water"](${around});
+  nwr["place"="locality"]["name"](${around});
   ${cafeClause}
 );
-out center ${MAX_RESULTS};
+out center ${OVERPASS_OUT_LIMIT};
 `.trim();
 }
 
 function inferCategory(tags: Record<string, string>): DestinationCategory {
   if (tags.tourism === 'viewpoint') return 'viewpoint';
   if (tags.natural === 'beach') return 'beach';
+  if (tags.natural === 'bay') return 'bay';
+  if (tags.natural === 'peak') return 'peak';
   if (tags.leisure === 'nature_reserve') return 'nature_reserve';
+  if (tags.boundary === 'protected_area') return 'protected_area';
   if (tags.leisure === 'park') return 'park';
-  if (tags.water === 'lake' || tags.natural === 'water') return 'lake';
+  if (tags.natural === 'water' || tags.water) return 'lake';
   if (tags.tourism === 'picnic_site') return 'picnic_site';
   if (tags.amenity === 'cafe') return 'cafe';
   if (tags.tourism === 'attraction') return 'attraction';
+  if (tags.place === 'locality') return 'locality';
   return 'scenic';
 }
 
@@ -110,14 +159,17 @@ function inferVibes(
 
   switch (category) {
     case 'viewpoint':
+    case 'peak':
       vibes.add('views');
       vibes.add('quiet-roads');
       break;
     case 'beach':
+    case 'bay':
       vibes.add('coast');
       vibes.add('views');
       break;
     case 'nature_reserve':
+    case 'protected_area':
     case 'lake':
       vibes.add('forest');
       vibes.add('quiet-roads');
@@ -134,6 +186,7 @@ function inferVibes(
       vibes.add('coffee');
       break;
     case 'attraction':
+    case 'locality':
       vibes.add('views');
       break;
     default:
@@ -142,14 +195,14 @@ function inferVibes(
   }
 
   const name = (tags.name ?? '').toLowerCase();
-  if (/(beach|bay|coast|shore|ocean|sea)/.test(name)) {
+  if (/(beach|bay|coast|shore|ocean|sea|harbour|harbor)/.test(name)) {
     vibes.add('coast');
     vibes.add('views');
   }
-  if (/(lake|forest|cedar|woods|river|falls)/.test(name)) {
+  if (/(lake|forest|cedar|woods|river|falls|creek)/.test(name)) {
     vibes.add('forest');
   }
-  if (/(lookout|viewpoint|mountain|peak|hill)/.test(name)) {
+  if (/(lookout|viewpoint|mountain|peak|hill|bluff)/.test(name)) {
     vibes.add('views');
   }
 
@@ -162,9 +215,14 @@ function descriptionFor(category: DestinationCategory, name: string): string {
       return `A nearby lookout worth the short drive to ${name}.`;
     case 'beach':
       return `Coastal air and an easy loop out to ${name}.`;
+    case 'bay':
+      return `A shoreline turnaround around ${name}.`;
+    case 'peak':
+      return `A higher vantage near ${name}.`;
     case 'park':
       return `A green pause at ${name} before turning back.`;
     case 'nature_reserve':
+    case 'protected_area':
       return `Quieter roads and wilder edges around ${name}.`;
     case 'lake':
       return `A calm water-bound turnaround at ${name}.`;
@@ -174,6 +232,8 @@ function descriptionFor(category: DestinationCategory, name: string): string {
       return `A coffee-worthy destination at ${name}.`;
     case 'attraction':
       return `A local highlight centered on ${name}.`;
+    case 'locality':
+      return `A short scenic run out toward ${name}.`;
     default:
       return `A scenic turnaround at ${name}.`;
   }
@@ -189,6 +249,26 @@ function normalizeElement(element: OverpassElement): ScenicDestination | null {
   const latitude = element.lat ?? element.center?.lat;
   const longitude = element.lon ?? element.center?.lon;
   if (latitude == null || longitude == null) {
+    if (__DEV__) {
+      console.log(
+        '[Scenic places] invalid coordinates (missing lat/lon)',
+        element.type,
+        element.id,
+        name,
+      );
+    }
+    return null;
+  }
+
+  const coordinate = { latitude, longitude };
+  if (!isValidCoordinate(coordinate)) {
+    if (__DEV__) {
+      console.log(
+        '[Scenic places] invalid coordinates',
+        name,
+        coordinate,
+      );
+    }
     return null;
   }
 
@@ -198,7 +278,7 @@ function normalizeElement(element: OverpassElement): ScenicDestination | null {
   return {
     id: `overpass-${element.type}-${element.id}`,
     name,
-    coordinate: { latitude, longitude },
+    coordinate,
     category,
     vibes,
     shortDescription: descriptionFor(category, name),
@@ -222,100 +302,215 @@ function dedupePlaces(places: ScenicDestination[]): ScenicDestination[] {
   return result;
 }
 
+function emptyDebug(
+  input: FetchNearbyPlacesInput,
+  extras: Partial<PlacesFetchDebug> = {},
+): PlacesFetchDebug {
+  const window = getDiscoveryDurationWindow(input.durationId);
+  return {
+    origin: input.origin,
+    durationId: input.durationId,
+    vibeId: input.vibeId,
+    searchRadiusMeters: window.searchRadiusMeters,
+    maxStraightLineKm: window.maxStraightLineKm,
+    rawElementCount: 0,
+    normalizedCount: 0,
+    afterDedupeCount: 0,
+    afterGeoFilterCount: 0,
+    cacheHit: false,
+    endpointUsed: null,
+    overpassError: null,
+    ...extras,
+  };
+}
+
 export async function fetchNearbyScenicPlaces(
   input: FetchNearbyPlacesInput,
-): Promise<ScenicDestination[]> {
+): Promise<PlacesFetchResult> {
+  if (!isValidCoordinate(input.origin)) {
+    const message = `Invalid origin coordinates: ${JSON.stringify(input.origin)}`;
+    console.error('[Scenic places] coordinates are invalid', message);
+    throw new Error(message);
+  }
+
   const key = cacheKey(input);
   const cached = placesCache.get(key);
   if (cached && cached.expiresAt > Date.now()) {
     console.log('[Scenic places] cache hit', key, cached.places.length);
-    return cached.places;
+    return {
+      places: cached.places,
+      debug: { ...cached.debug, cacheHit: true },
+    };
   }
 
-  const window = getDurationWindow(input.durationId);
+  const window = getDiscoveryDurationWindow(input.durationId);
   const includeCafes = input.vibeId === 'coffee' || input.vibeId === 'surprise';
-  const query = buildOverpassQuery(
-    input.origin,
-    window.searchRadiusMeters,
-    includeCafes,
-  );
+  // Lite first — public mirrors often choke on broad nwr queries.
+  const queryModes: Array<'full' | 'lite'> = ['lite', 'full'];
 
   console.log('[Scenic places] Overpass search', {
     origin: input.origin,
     radiusMeters: window.searchRadiusMeters,
+    durationId: input.durationId,
     vibeId: input.vibeId,
   });
 
   let lastError: Error | null = null;
+  let sawSuccessfulEmpty = false;
 
-  for (const endpoint of OVERPASS_URLS) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), OVERPASS_TIMEOUT_MS);
+  for (const mode of queryModes) {
+    const query = buildOverpassQuery(
+      input.origin,
+      window.searchRadiusMeters,
+      includeCafes,
+      mode,
+    );
 
-    try {
-      console.log('[Scenic places] trying Overpass mirror', endpoint);
+    for (const endpoint of OVERPASS_URLS) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), OVERPASS_TIMEOUT_MS);
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Accept: 'application/json',
-          // Some public Overpass mirrors reject requests without a UA.
-          'User-Agent': 'ScenicApp/1.0 (prototype; scenic-drives)',
-        },
-        body: new URLSearchParams({ data: query }).toString(),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Overpass request failed (${response.status}).`);
-      }
-
-      const raw = await response.text();
-      let data: OverpassResponse;
       try {
-        data = JSON.parse(raw) as OverpassResponse;
-      } catch {
-        throw new Error('Overpass returned an unexpected response.');
+        console.log(
+          '[Scenic places] trying Overpass mirror',
+          mode,
+          endpoint,
+        );
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Accept: 'application/json',
+            'User-Agent': 'ScenicApp/1.0 (prototype; scenic-drives)',
+          },
+          body: new URLSearchParams({ data: query }).toString(),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          const bodyPreview = (await response.text()).slice(0, 240);
+          throw new Error(
+            `Overpass request failed (${response.status}) at ${endpoint}: ${bodyPreview}`,
+          );
+        }
+
+        const raw = await response.text();
+        let data: OverpassResponse;
+        try {
+          data = JSON.parse(raw) as OverpassResponse;
+        } catch (parseError) {
+          console.error(
+            '[Scenic places] JSON parsing failed',
+            endpoint,
+            parseError,
+            raw.slice(0, 400),
+          );
+          throw new Error(
+            `Overpass JSON parsing failed at ${endpoint}: ${
+              parseError instanceof Error ? parseError.message : 'unknown'
+            }`,
+          );
+        }
+
+        const elements = data.elements ?? [];
+        if (elements.length === 0) {
+          sawSuccessfulEmpty = true;
+          console.log(
+            '[Scenic places] Overpass returned 0 elements',
+            mode,
+            endpoint,
+          );
+          lastError = new Error(`Overpass returned no places (${endpoint}).`);
+          continue;
+        }
+
+        const normalized = elements
+          .map(normalizeElement)
+          .filter((place): place is ScenicDestination => place != null);
+        const deduped = dedupePlaces(normalized);
+        const filtered = deduped
+          .filter((place) => {
+            const km = distanceKm(input.origin, place.coordinate);
+            return km >= MIN_DISTANCE_KM && km <= window.maxStraightLineKm;
+          })
+          .slice(0, MAX_USEFUL_CANDIDATES);
+
+        const debug = emptyDebug(input, {
+          rawElementCount: elements.length,
+          normalizedCount: normalized.length,
+          afterDedupeCount: deduped.length,
+          afterGeoFilterCount: filtered.length,
+          endpointUsed: `${endpoint} (${mode})`,
+        });
+
+        console.log('[Scenic places] pipeline counts', {
+          mode,
+          raw: debug.rawElementCount,
+          normalized: debug.normalizedCount,
+          afterDedupe: debug.afterDedupeCount,
+          afterGeoFilter: debug.afterGeoFilterCount,
+        });
+
+        if (__DEV__) {
+          for (const place of filtered) {
+            console.log(
+              '[Scenic places] candidate',
+              place.name,
+              `${distanceKm(input.origin, place.coordinate).toFixed(1)} km`,
+              place.category,
+            );
+          }
+        }
+
+        placesCache.set(key, {
+          expiresAt: Date.now() + CACHE_TTL_MS,
+          places: filtered,
+          debug,
+        });
+
+        return { places: filtered, debug };
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          lastError = new Error(
+            `Overpass timed out after ${OVERPASS_TIMEOUT_MS}ms (${endpoint}, ${mode}).`,
+          );
+          console.error(
+            '[Scenic places] Overpass timed out',
+            mode,
+            endpoint,
+            lastError,
+          );
+        } else {
+          lastError =
+            error instanceof Error
+              ? error
+              : new Error('Unable to search nearby places right now.');
+          console.error(
+            '[Scenic places] Overpass failed',
+            mode,
+            endpoint,
+            lastError,
+          );
+        }
+      } finally {
+        clearTimeout(timeout);
       }
-
-      const elements = data.elements ?? [];
-      if (elements.length === 0) {
-        // Empty payloads are often transient on busy public mirrors.
-        throw new Error('Overpass returned no places for this search.');
-      }
-
-      const normalized = elements
-        .map(normalizeElement)
-        .filter((place): place is ScenicDestination => place != null);
-
-      const filtered = dedupePlaces(normalized).filter((place) => {
-        const km = distanceKm(input.origin, place.coordinate);
-        return km >= MIN_DISTANCE_KM && km <= window.maxStraightLineKm;
-      });
-
-      console.log('[Scenic places] normalized', filtered.length);
-
-      placesCache.set(key, {
-        expiresAt: Date.now() + CACHE_TTL_MS,
-        places: filtered,
-      });
-
-      return filtered;
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        lastError = new Error('Nearby place search timed out. Please try again.');
-      } else {
-        lastError =
-          error instanceof Error
-            ? error
-            : new Error('Unable to search nearby places right now.');
-      }
-      console.log('[Scenic places] mirror failed', endpoint, lastError.message);
-    } finally {
-      clearTimeout(timeout);
     }
   }
 
-  throw lastError ?? new Error('Unable to search nearby places right now.');
+  // All mirrors returned successful-but-empty responses.
+  if (sawSuccessfulEmpty && lastError?.message.includes('returned no places')) {
+    const debug = emptyDebug(input, {
+      overpassError: null,
+      endpointUsed: OVERPASS_URLS[OVERPASS_URLS.length - 1],
+    });
+    console.log('[Scenic places] all mirrors empty — returning 0 places');
+    return { places: [], debug };
+  }
+
+  const message =
+    lastError?.message ?? 'Unable to search nearby places right now.';
+  console.error('[Scenic places] Overpass failed completely', message);
+  throw new Error(message);
 }

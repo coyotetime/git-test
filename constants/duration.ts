@@ -10,6 +10,7 @@ export type DurationWindow = {
   searchRadiusMeters: number;
 };
 
+/** Curated waypoint matching — tighter windows. */
 export function getDurationWindow(
   durationId: DurationOption['id'],
 ): DurationWindow {
@@ -45,6 +46,49 @@ export function getDurationWindow(
         maxMinutes: 40,
         maxStraightLineKm: 15,
         searchRadiusMeters: 15_000,
+      };
+  }
+}
+
+/**
+ * Nearby OSM discovery — intentionally looser than curated matching.
+ * Rank by closeness to target; tighten later once reliability is proven.
+ */
+export function getDiscoveryDurationWindow(
+  durationId: DurationOption['id'],
+): DurationWindow {
+  switch (durationId) {
+    case '30':
+      return {
+        targetMinutes: 30,
+        minMinutes: 15,
+        maxMinutes: 50,
+        maxStraightLineKm: 20,
+        searchRadiusMeters: 20_000,
+      };
+    case '60':
+      return {
+        targetMinutes: 60,
+        minMinutes: 35,
+        maxMinutes: 90,
+        maxStraightLineKm: 35,
+        searchRadiusMeters: 35_000,
+      };
+    case '90':
+      return {
+        targetMinutes: 90,
+        minMinutes: 55,
+        maxMinutes: 130,
+        maxStraightLineKm: 55,
+        searchRadiusMeters: 55_000,
+      };
+    default:
+      return {
+        targetMinutes: 30,
+        minMinutes: 15,
+        maxMinutes: 50,
+        maxStraightLineKm: 20,
+        searchRadiusMeters: 20_000,
       };
   }
 }
