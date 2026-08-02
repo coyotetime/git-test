@@ -7,6 +7,7 @@ import MapView, {
   Region,
 } from 'react-native-maps';
 
+import { WaypointMarker } from '@/components/WaypointMarker';
 import { LatLng, RouteStop } from '@/constants/routes';
 import { colors, radii, shadows } from '@/constants/theme';
 
@@ -27,8 +28,8 @@ function getInitialRegion(points: LatLng[]): Region {
   return {
     latitude: (minLat + maxLat) / 2,
     longitude: (minLng + maxLng) / 2,
-    latitudeDelta: Math.max((maxLat - minLat) * 1.8, 0.03),
-    longitudeDelta: Math.max((maxLng - minLng) * 1.8, 0.03),
+    latitudeDelta: Math.max((maxLat - minLat) * 1.35, 0.018),
+    longitudeDelta: Math.max((maxLng - minLng) * 1.35, 0.018),
   };
 }
 
@@ -49,10 +50,10 @@ export function RouteMap({ height, stops, polyline }: RouteMapProps) {
     const fitTimer = setTimeout(() => {
       mapRef.current?.fitToCoordinates(fitPoints, {
         edgePadding: {
-          top: 72,
-          right: 48,
-          bottom: 48,
-          left: 48,
+          top: 56,
+          right: 32,
+          bottom: 32,
+          left: 32,
         },
         animated: true,
       });
@@ -60,7 +61,7 @@ export function RouteMap({ height, stops, polyline }: RouteMapProps) {
 
     const trackTimer = setTimeout(() => {
       setTracksViewChanges(false);
-    }, 750);
+    }, 800);
 
     return () => {
       clearTimeout(fitTimer);
@@ -98,16 +99,15 @@ export function RouteMap({ height, stops, polyline }: RouteMapProps) {
           lineJoin="round"
         />
 
-        {stops.map((stop) => (
+        {stops.map((stop, index) => (
           <Marker
             key={stop.id}
             coordinate={stop.coordinate}
             title={stop.name}
+            anchor={{ x: 0.5, y: 1 }}
             tracksViewChanges={tracksViewChanges}
           >
-            <View style={styles.markerOuter}>
-              <View style={styles.markerInner} />
-            </View>
+            <WaypointMarker index={index + 1} />
           </Marker>
         ))}
       </MapView>
@@ -122,22 +122,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#DCE3D8',
     borderBottomLeftRadius: radii.xl,
     borderBottomRightRadius: radii.xl,
-  },
-  markerOuter: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.surface,
-    borderWidth: 3,
-    borderColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.card,
-  },
-  markerInner: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.primary,
   },
 });
