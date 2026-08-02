@@ -1,18 +1,22 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import { RouteStop } from '@/constants/routes';
+import { LatLng, RouteStop } from '@/constants/routes';
 import { colors, radii, shadows, spacing, typography } from '@/constants/theme';
-import { useDrivingRoute } from '@/hooks/useDrivingRoute';
 
 type RouteMapProps = {
   height: number;
   stops: RouteStop[];
+  polyline: LatLng[] | null;
+  isLoading?: boolean;
+  error?: string | null;
 };
 
-export function RouteMap({ height, stops }: RouteMapProps) {
-  const waypoints = stops.map((stop) => stop.coordinate);
-  const { polyline, isLoading, error } = useDrivingRoute(waypoints);
-
+export function RouteMap({
+  height,
+  polyline,
+  isLoading = false,
+  error = null,
+}: RouteMapProps) {
   return (
     <View style={[styles.container, { height }, shadows.card]}>
       {isLoading ? (

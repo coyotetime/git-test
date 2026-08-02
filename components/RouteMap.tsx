@@ -14,13 +14,16 @@ import MapView, {
 } from 'react-native-maps';
 
 import { WaypointMarker } from '@/components/WaypointMarker';
+import { FALLBACK_COORDINATE } from '@/constants/location';
 import { LatLng, RouteStop } from '@/constants/routes';
 import { colors, radii, shadows, spacing, typography } from '@/constants/theme';
-import { useDrivingRoute } from '@/hooks/useDrivingRoute';
 
 type RouteMapProps = {
   height: number;
   stops: RouteStop[];
+  polyline: LatLng[] | null;
+  isLoading?: boolean;
+  error?: string | null;
 };
 
 function getInitialRegion(points: LatLng[]): Region {
@@ -39,18 +42,26 @@ function getInitialRegion(points: LatLng[]): Region {
   };
 }
 
-export function RouteMap({ height, stops }: RouteMapProps) {
+export function RouteMap({
+  height,
+  stops,
+  polyline,
+  isLoading = false,
+  error = null,
+}: RouteMapProps) {
   const mapRef = useRef<MapView>(null);
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
-  const waypoints = useMemo(
-    () => stops.map((stop) => stop.coordinate),
+
+  const fallbackPoints = useMemo(
+    () =>
+      stops.length > 0
+        ? stops.map((stop) => stop.coordinate)
+        : [FALLBACK_COORDINATE],
     [stops],
   );
-  const { polyline, isLoading, error } = useDrivingRoute(waypoints);
-
-  const fallbackRegion = useMemo(
-    () => getInitialRegion(waypoints),
-    [waypoints],
+  const initialRegion = useMemo(
+    () => getInitialRegion(polyline && polyline.length > 0 ? polyline : fallbackPoints),
+    [fallbackPoints, polyline],
   );
 
   useEffect(() => {
@@ -86,7 +97,7 @@ export function RouteMap({ height, stops }: RouteMapProps) {
         ref={mapRef}
         style={StyleSheet.absoluteFill}
         provider={PROVIDER_DEFAULT}
-        initialRegion={fallbackRegion}
+        initialRegion={initialRegion}
         mapType={Platform.OS === 'ios' ? 'mutedStandard' : 'standard'}
         showsUserLocation={false}
         showsMyLocationButton={false}
@@ -114,7 +125,7 @@ export function RouteMap({ height, stops }: RouteMapProps) {
 
         {stops.map((stop, index) => (
           <Marker
-            key={stop.id}
+            key={`${stop.id}-${index}`}
             coordinate={stop.coordinate}
             title={stop.name}
             anchor={{ x: 0.5, y: 1 }}

@@ -32,6 +32,12 @@
           "resizeMode": "contain",
           "backgroundColor": "#F5F0E6"
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Scenic uses your location to start scenic drives near you."
+        }
       ]
     ],
     "experiments": {

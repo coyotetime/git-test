@@ -21,18 +21,39 @@ import {
   VibeOption,
 } from '@/constants/options';
 import { colors, spacing, typography } from '@/constants/theme';
+import { useUserLocation } from '@/hooks/useUserLocation';
+import { getUserLocation } from '@/services/location';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const isCompact = height < 740;
+  const { label: locationLabel } = useUserLocation();
 
   const [durationId, setDurationId] =
     useState<DurationOption['id']>(DEFAULT_DURATION_ID);
   const [vibeId, setVibeId] = useState<VibeOption['id'] | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
 
-  const handleFindDrive = () => {
-    router.push('/route');
+  const handleFindDrive = async () => {
+    if (isStarting) {
+      return;
+    }
+
+    setIsStarting(true);
+    try {
+      // Refresh only if we don't already have a session location.
+      await getUserLocation();
+      router.push({
+        pathname: '/route',
+        params: {
+          durationId,
+          vibeId: vibeId ?? 'surprise',
+        },
+      });
+    } finally {
+      setIsStarting(false);
+    }
   };
 
   return (
@@ -50,7 +71,7 @@ export default function HomeScreen() {
         bounces
       >
         <View style={styles.header}>
-          <Text style={styles.location}>Victoria, BC</Text>
+          <Text style={styles.location}>{locationLabel}</Text>
           <Text style={styles.brand}>Scenic</Text>
           <Text style={styles.heading}>Where do you feel like going?</Text>
         </View>
@@ -76,7 +97,13 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.cta}>
-          <PrimaryButton label="Find me a drive" onPress={handleFindDrive} />
+          <PrimaryButton
+            label={isStarting ? 'Finding a drive…' : 'Find me a drive'}
+            onPress={() => {
+              void handleFindDrive();
+            }}
+            disabled={isStarting}
+          />
         </View>
       </ScrollView>
     </View>

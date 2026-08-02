@@ -18,10 +18,18 @@ type OsrmRouteResponse = {
   message?: string;
   routes?: Array<{
     geometry: OsrmGeoJsonLineString;
+    duration: number;
+    distance: number;
   }>;
 };
 
-const routeGeometryCache = new Map<string, LatLng[]>();
+export type DrivingRouteResult = {
+  geometry: LatLng[];
+  durationSeconds: number;
+  distanceMeters: number;
+};
+
+const routeCache = new Map<string, DrivingRouteResult>();
 
 function cacheKey(waypoints: LatLng[]): string {
   return waypoints
@@ -46,13 +54,15 @@ function geoJsonToLatLng(coordinates: [number, number][]): LatLng[] {
   }));
 }
 
-export async function fetchDrivingRoute(waypoints: LatLng[]): Promise<LatLng[]> {
+export async function fetchDrivingRoute(
+  waypoints: LatLng[],
+): Promise<DrivingRouteResult> {
   if (waypoints.length < 2) {
     throw new Error('At least two waypoints are required to calculate a route.');
   }
 
   const key = cacheKey(waypoints);
-  const cached = routeGeometryCache.get(key);
+  const cached = routeCache.get(key);
   if (cached) {
     return cached;
   }
@@ -67,11 +77,17 @@ export async function fetchDrivingRoute(waypoints: LatLng[]): Promise<LatLng[]> 
   }
 
   const data = (await response.json()) as OsrmRouteResponse;
-  if (data.code !== 'Ok' || !data.routes?.[0]?.geometry?.coordinates?.length) {
+  const route = data.routes?.[0];
+  if (data.code !== 'Ok' || !route?.geometry?.coordinates?.length) {
     throw new Error(data.message ?? 'No driving route was found for these stops.');
   }
 
-  const geometry = geoJsonToLatLng(data.routes[0].geometry.coordinates);
-  routeGeometryCache.set(key, geometry);
-  return geometry;
+  const result: DrivingRouteResult = {
+    geometry: geoJsonToLatLng(route.geometry.coordinates),
+    durationSeconds: route.duration,
+    distanceMeters: route.distance,
+  };
+
+  routeCache.set(key, result);
+  return result;
 }
