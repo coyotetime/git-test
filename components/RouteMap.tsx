@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import MapView, {
   Marker,
   Polyline,
@@ -9,12 +15,12 @@ import MapView, {
 
 import { WaypointMarker } from '@/components/WaypointMarker';
 import { LatLng, RouteStop } from '@/constants/routes';
-import { colors, radii, shadows } from '@/constants/theme';
+import { colors, radii, shadows, spacing, typography } from '@/constants/theme';
+import { useDrivingRoute } from '@/hooks/useDrivingRoute';
 
 type RouteMapProps = {
   height: number;
   stops: RouteStop[];
-  polyline: LatLng[];
 };
 
 function getInitialRegion(points: LatLng[]): Region {
@@ -33,22 +39,27 @@ function getInitialRegion(points: LatLng[]): Region {
   };
 }
 
-export function RouteMap({ height, stops, polyline }: RouteMapProps) {
+export function RouteMap({ height, stops }: RouteMapProps) {
   const mapRef = useRef<MapView>(null);
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
-  const fitPoints = useMemo(
-    () => (polyline.length > 0 ? polyline : stops.map((stop) => stop.coordinate)),
-    [polyline, stops],
+  const waypoints = useMemo(
+    () => stops.map((stop) => stop.coordinate),
+    [stops],
   );
-  const initialRegion = useMemo(() => getInitialRegion(fitPoints), [fitPoints]);
+  const { polyline, isLoading, error } = useDrivingRoute(waypoints);
+
+  const fallbackRegion = useMemo(
+    () => getInitialRegion(waypoints),
+    [waypoints],
+  );
 
   useEffect(() => {
-    if (fitPoints.length === 0) {
+    if (!polyline || polyline.length === 0) {
       return;
     }
 
     const fitTimer = setTimeout(() => {
-      mapRef.current?.fitToCoordinates(fitPoints, {
+      mapRef.current?.fitToCoordinates(polyline, {
         edgePadding: {
           top: 56,
           right: 32,
@@ -67,7 +78,7 @@ export function RouteMap({ height, stops, polyline }: RouteMapProps) {
       clearTimeout(fitTimer);
       clearTimeout(trackTimer);
     };
-  }, [fitPoints]);
+  }, [polyline]);
 
   return (
     <View style={[styles.container, { height }, shadows.card]}>
@@ -75,7 +86,7 @@ export function RouteMap({ height, stops, polyline }: RouteMapProps) {
         ref={mapRef}
         style={StyleSheet.absoluteFill}
         provider={PROVIDER_DEFAULT}
-        initialRegion={initialRegion}
+        initialRegion={fallbackRegion}
         mapType={Platform.OS === 'ios' ? 'mutedStandard' : 'standard'}
         showsUserLocation={false}
         showsMyLocationButton={false}
@@ -88,16 +99,18 @@ export function RouteMap({ height, stops, polyline }: RouteMapProps) {
         toolbarEnabled={false}
         rotateEnabled={false}
         pitchEnabled={false}
-        scrollEnabled
-        zoomEnabled
+        scrollEnabled={!isLoading && !error}
+        zoomEnabled={!isLoading && !error}
       >
-        <Polyline
-          coordinates={polyline}
-          strokeColor={colors.primary}
-          strokeWidth={4}
-          lineCap="round"
-          lineJoin="round"
-        />
+        {polyline ? (
+          <Polyline
+            coordinates={polyline}
+            strokeColor={colors.primary}
+            strokeWidth={4}
+            lineCap="round"
+            lineJoin="round"
+          />
+        ) : null}
 
         {stops.map((stop, index) => (
           <Marker
@@ -111,6 +124,20 @@ export function RouteMap({ height, stops, polyline }: RouteMapProps) {
           </Marker>
         ))}
       </MapView>
+
+      {isLoading ? (
+        <View style={styles.overlay} pointerEvents="none">
+          <ActivityIndicator color={colors.primary} />
+          <Text style={styles.overlayText}>Mapping your drive…</Text>
+        </View>
+      ) : null}
+
+      {error ? (
+        <View style={styles.overlay}>
+          <Text style={styles.errorTitle}>Route unavailable</Text>
+          <Text style={styles.errorBody}>{error}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -122,5 +149,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#DCE3D8',
     borderBottomLeftRadius: radii.xl,
     borderBottomRightRadius: radii.xl,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    backgroundColor: 'rgba(245, 240, 230, 0.72)',
+  },
+  overlayText: {
+    ...typography.helper,
+    color: colors.primary,
+  },
+  errorTitle: {
+    ...typography.section,
+    color: colors.primary,
+    textAlign: 'center',
+  },
+  errorBody: {
+    ...typography.helper,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
 });

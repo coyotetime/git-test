@@ -27,11 +27,7 @@ export default function RouteResultScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.mapBlock}>
-        <RouteMap
-          height={mapHeight}
-          stops={route.stops}
-          polyline={route.polyline}
-        />
+        <RouteMap height={mapHeight} stops={route.stops} />
         <View style={[styles.backWrap, { top: insets.top + spacing.sm }]}>
           <BackButton onPress={() => router.back()} />
         </View>
