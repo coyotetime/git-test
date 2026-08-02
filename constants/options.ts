@@ -1,27 +1,34 @@
+import { ComponentProps } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+
+type IconName = ComponentProps<typeof Ionicons>['name'];
+
 export type DurationOption = {
   id: '30' | '60' | '90';
-  label: string;
   minutes: number;
+  unit: string;
 };
 
 export type VibeOption = {
   id: 'coast' | 'forest' | 'views' | 'quiet-roads' | 'coffee' | 'surprise';
   label: string;
+  icon: IconName;
+  accent?: 'surprise';
 };
 
 export const DURATION_OPTIONS: DurationOption[] = [
-  { id: '30', label: '30 min', minutes: 30 },
-  { id: '60', label: '60 min', minutes: 60 },
-  { id: '90', label: '90 min', minutes: 90 },
+  { id: '30', minutes: 30, unit: 'min' },
+  { id: '60', minutes: 60, unit: 'min' },
+  { id: '90', minutes: 90, unit: 'min' },
 ];
 
 export const VIBE_OPTIONS: VibeOption[] = [
-  { id: 'coast', label: 'Coast' },
-  { id: 'forest', label: 'Forest' },
-  { id: 'views', label: 'Views' },
-  { id: 'quiet-roads', label: 'Quiet Roads' },
-  { id: 'coffee', label: 'Coffee' },
-  { id: 'surprise', label: 'Surprise Me' },
+  { id: 'coast', label: 'Coast', icon: 'water-outline' },
+  { id: 'forest', label: 'Forest', icon: 'leaf-outline' },
+  { id: 'views', label: 'Views', icon: 'partly-sunny-outline' },
+  { id: 'quiet-roads', label: 'Quiet Roads', icon: 'trail-sign-outline' },
+  { id: 'coffee', label: 'Coffee', icon: 'cafe-outline' },
+  { id: 'surprise', label: 'Surprise Me', icon: 'sparkles-outline', accent: 'surprise' },
 ];
 
 export const DEFAULT_DURATION_ID: DurationOption['id'] = '30';

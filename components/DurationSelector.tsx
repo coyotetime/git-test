@@ -1,13 +1,69 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import { useEffect } from 'react';
 
 import { DurationOption } from '@/constants/options';
 import { colors, radii, shadows, spacing, typography } from '@/constants/theme';
+import { selectionHaptic } from '@/utils/haptics';
 
 type DurationSelectorProps = {
   options: DurationOption[];
   selectedId: DurationOption['id'];
   onSelect: (id: DurationOption['id']) => void;
 };
+
+type DurationCardProps = {
+  option: DurationOption;
+  selected: boolean;
+  onSelect: (id: DurationOption['id']) => void;
+};
+
+function DurationCard({ option, selected, onSelect }: DurationCardProps) {
+  const scale = useSharedValue(selected ? 1.02 : 1);
+  const opacity = useSharedValue(selected ? 1 : 0.92);
+
+  useEffect(() => {
+    scale.value = withTiming(selected ? 1.02 : 1, { duration: 180 });
+    opacity.value = withTiming(selected ? 1 : 0.92, { duration: 180 });
+  }, [opacity, scale, selected]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View style={[styles.cardWrap, animatedStyle]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
+        accessibilityLabel={`${option.minutes} minutes`}
+        onPress={() => {
+          if (!selected) {
+            selectionHaptic();
+          }
+          onSelect(option.id);
+        }}
+        style={({ pressed }) => [
+          styles.card,
+          selected && styles.cardSelected,
+          pressed && styles.cardPressed,
+        ]}
+      >
+        <Text style={[styles.value, selected && styles.valueSelected]}>
+          {option.minutes}
+        </Text>
+        <Text style={[styles.unit, selected && styles.unitSelected]}>
+          {option.unit}
+        </Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
 
 export function DurationSelector({
   options,
@@ -16,27 +72,14 @@ export function DurationSelector({
 }: DurationSelectorProps) {
   return (
     <View style={styles.row}>
-      {options.map((option) => {
-        const selected = option.id === selectedId;
-
-        return (
-          <Pressable
-            key={option.id}
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-            onPress={() => onSelect(option.id)}
-            style={({ pressed }) => [
-              styles.option,
-              selected && styles.optionSelected,
-              pressed && styles.optionPressed,
-            ]}
-          >
-            <Text style={[styles.label, selected && styles.labelSelected]}>
-              {option.label}
-            </Text>
-          </Pressable>
-        );
-      })}
+      {options.map((option) => (
+        <DurationCard
+          key={option.id}
+          option={option}
+          selected={option.id === selectedId}
+          onSelect={onSelect}
+        />
+      ))}
     </View>
   );
 }
@@ -46,32 +89,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
-  option: {
+  cardWrap: {
     flex: 1,
+  },
+  card: {
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 64,
-    paddingVertical: spacing.md,
+    minHeight: 132,
+    paddingVertical: spacing.lg,
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.md,
+    borderRadius: radii.xl,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.soft,
+    ...shadows.card,
   },
-  optionSelected: {
+  cardSelected: {
     backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    ...shadows.selected,
   },
-  optionPressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.98 }],
+  cardPressed: {
+    opacity: 0.94,
   },
-  label: {
-    ...typography.label,
+  value: {
+    ...typography.durationValue,
     color: colors.primary,
   },
-  labelSelected: {
+  valueSelected: {
     color: colors.textOnPrimary,
+  },
+  unit: {
+    ...typography.durationUnit,
+    marginTop: 4,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+  },
+  unitSelected: {
+    color: 'rgba(255, 253, 248, 0.78)',
   },
 });

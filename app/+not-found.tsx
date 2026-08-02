@@ -35,7 +35,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   linkText: {
-    ...typography.label,
+    ...typography.section,
     color: colors.primary,
   },
 });

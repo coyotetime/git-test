@@ -1,11 +1,17 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DurationSelector } from '@/components/DurationSelector';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { SectionHeading } from '@/components/SectionHeading';
-import { VibeGrid } from '@/components/VibeGrid';
+import { VibeChips } from '@/components/VibeChips';
 import {
   DEFAULT_DURATION_ID,
   DURATION_OPTIONS,
@@ -16,6 +22,10 @@ import {
 import { colors, spacing, typography } from '@/constants/theme';
 
 export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  const isCompact = height < 740;
+
   const [durationId, setDurationId] =
     useState<DurationOption['id']>(DEFAULT_DURATION_ID);
   const [vibeId, setVibeId] = useState<VibeOption['id'] | null>(null);
@@ -25,17 +35,26 @@ export default function HomeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <View style={styles.screen}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: insets.top + (isCompact ? spacing.md : spacing.xl),
+            paddingBottom: insets.bottom + spacing.lg,
+            gap: isCompact ? spacing.lg : spacing.xl,
+          },
+        ]}
         showsVerticalScrollIndicator={false}
+        bounces
       >
         <View style={styles.header}>
+          <Text style={styles.location}>Victoria, BC</Text>
           <Text style={styles.brand}>Scenic</Text>
           <Text style={styles.heading}>Where do you feel like going?</Text>
         </View>
 
-        <View style={styles.section}>
+        <View style={styles.durationSection}>
           <DurationSelector
             options={DURATION_OPTIONS}
             selectedId={durationId}
@@ -43,38 +62,42 @@ export default function HomeScreen() {
           />
         </View>
 
-        <View style={styles.section}>
+        <View style={styles.vibeSection}>
           <SectionHeading>Pick a vibe</SectionHeading>
-          <VibeGrid
+          <VibeChips
             options={VIBE_OPTIONS}
             selectedId={vibeId}
             onSelect={setVibeId}
           />
+          <Text style={styles.helper}>
+            We’ll match the drive to your mood and time
+          </Text>
         </View>
 
         <View style={styles.cta}>
           <PrimaryButton label="Find me a drive" onPress={handleFindDrive} />
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  screen: {
     flex: 1,
     backgroundColor: colors.background,
   },
   content: {
     flexGrow: 1,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.xxl,
-    gap: spacing.xl,
   },
   header: {
-    gap: spacing.md,
-    paddingTop: spacing.sm,
+    gap: spacing.sm,
+  },
+  location: {
+    ...typography.location,
+    color: colors.textSecondary,
+    marginBottom: 2,
   },
   brand: {
     ...typography.brand,
@@ -83,13 +106,22 @@ const styles = StyleSheet.create({
   heading: {
     ...typography.heading,
     color: colors.text,
-    maxWidth: 320,
+    maxWidth: 300,
+    marginTop: 2,
   },
-  section: {
+  durationSection: {
+    marginTop: spacing.xs,
+  },
+  vibeSection: {
     gap: spacing.md,
+  },
+  helper: {
+    ...typography.helper,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
   cta: {
     marginTop: 'auto',
-    paddingTop: spacing.md,
+    paddingTop: spacing.lg,
   },
 });

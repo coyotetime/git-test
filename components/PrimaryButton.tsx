@@ -1,4 +1,9 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { colors, radii, shadows, spacing, typography } from '@/constants/theme';
 
@@ -8,25 +13,41 @@ type PrimaryButtonProps = {
   disabled?: boolean;
 };
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 export function PrimaryButton({
   label,
   onPress,
   disabled = false,
 }: PrimaryButtonProps) {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
   return (
-    <Pressable
+    <AnimatedPressable
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [
+      onPressIn={() => {
+        if (!disabled) {
+          scale.value = withTiming(0.985, { duration: 120 });
+        }
+      }}
+      onPressOut={() => {
+        scale.value = withTiming(1, { duration: 140 });
+      }}
+      style={[
         styles.button,
         disabled && styles.buttonDisabled,
-        pressed && !disabled && styles.buttonPressed,
+        animatedStyle,
       ]}
     >
       <Text style={styles.label}>{label}</Text>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -34,16 +55,13 @@ const styles = StyleSheet.create({
   button: {
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 60,
-    paddingVertical: spacing.md,
+    alignSelf: 'stretch',
+    minHeight: 64,
+    paddingVertical: spacing.md + 2,
     paddingHorizontal: spacing.lg,
     borderRadius: radii.lg,
     backgroundColor: colors.primary,
     ...shadows.button,
-  },
-  buttonPressed: {
-    backgroundColor: colors.primarySoft,
-    transform: [{ scale: 0.985 }],
   },
   buttonDisabled: {
     opacity: 0.45,
