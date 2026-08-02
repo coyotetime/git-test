@@ -58,14 +58,15 @@ export type PlacesFetchResult = {
  * Replace with a hosted/production Overpass (or another places provider) before release.
  */
 const OVERPASS_URLS = [
-  'https://overpass-api.de/api/interpreter',
+  // mail.ru has been the most reliable public mirror for this prototype.
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
 ];
-/** Per-mirror timeout — keep short so bearing fallback can run. */
-const OVERPASS_TIMEOUT_MS = 8_000;
-/** Hard budget across all mirrors before discovery falls back. */
-const OVERPASS_TOTAL_BUDGET_MS = 12_000;
+/** Per-mirror timeout for a single parallel attempt. */
+const OVERPASS_TIMEOUT_MS = 10_000;
+/** Wait this long for the first successful mirror before falling back. */
+const OVERPASS_TOTAL_BUDGET_MS = 14_000;
 const MIN_DISTANCE_KM = 1;
 /** Cap useful candidates returned to discovery before OSRM. */
 const MAX_USEFUL_CANDIDATES = 30;
@@ -91,7 +92,7 @@ function buildOverpassQuery(
   origin: LatLng,
   radiusMeters: number,
   includeCafes: boolean,
-  mode: 'full' | 'lite' = 'full',
+  mode: 'fast' | 'lite' | 'full' = 'fast',
 ): string {
   const { latitude, longitude } = origin;
   const around = `around:${radiusMeters},${latitude},${longitude}`;
@@ -100,20 +101,33 @@ function buildOverpassQuery(
     ? `node["amenity"="cafe"]["name"](${around});`
     : '';
 
-  if (mode === 'lite') {
-    // Faster probe used when the full query times out on public mirrors.
+  if (mode === 'fast') {
+    // Tiny scenic set proven faster on public mirrors. Ways included for beaches.
     return `
-[out:json][timeout:25];
+[out:json][timeout:12];
 (
-  node["tourism"="viewpoint"](${around});
-  node["natural"="beach"](${around});
-  node["leisure"="park"]["name"](${around});
-  node["tourism"="attraction"]["name"](${around});
-  node["natural"="peak"](${around});
-  node["natural"="bay"](${around});
+  nwr["natural"="beach"](${around});
+  nwr["tourism"="viewpoint"](${around});
   ${cafeClause}
 );
-out body ${OVERPASS_OUT_LIMIT};
+out center ${OVERPASS_OUT_LIMIT};
+`.trim();
+  }
+
+  if (mode === 'lite') {
+    return `
+[out:json][timeout:15];
+(
+  nwr["tourism"="viewpoint"](${around});
+  nwr["natural"="beach"](${around});
+  nwr["leisure"="park"]["name"](${around});
+  nwr["tourism"="attraction"]["name"](${around});
+  nwr["natural"="peak"](${around});
+  nwr["natural"="bay"](${around});
+  nwr["tourism"="picnic_site"](${around});
+  ${cafeClause}
+);
+out center ${OVERPASS_OUT_LIMIT};
 `.trim();
   }
 
@@ -348,182 +362,159 @@ export async function fetchNearbyScenicPlaces(
 
   const window = getDiscoveryDurationWindow(input.durationId);
   const includeCafes = input.vibeId === 'coffee' || input.vibeId === 'surprise';
-  // Lite only for discovery reliability — full nwr queries often 504 on public mirrors.
-  const queryModes: Array<'full' | 'lite'> = ['lite'];
-  const startedAt = Date.now();
+  // One compact query, raced across mirrors — first non-empty wins.
+  const mode = 'fast' as const;
+  const query = buildOverpassQuery(
+    input.origin,
+    window.searchRadiusMeters,
+    includeCafes,
+    mode,
+  );
 
   console.log('[Scenic places] Overpass search', {
     origin: input.origin,
     radiusMeters: window.searchRadiusMeters,
     durationId: input.durationId,
     vibeId: input.vibeId,
+    mode,
     budgetMs: OVERPASS_TOTAL_BUDGET_MS,
   });
 
-  let lastError: Error | null = null;
-  let sawSuccessfulEmpty = false;
+  type MirrorSuccess = {
+    endpoint: string;
+    elements: OverpassElement[];
+  };
 
-  for (const mode of queryModes) {
-    const query = buildOverpassQuery(
-      input.origin,
-      window.searchRadiusMeters,
-      includeCafes,
-      mode,
-    );
+  const fetchMirror = async (endpoint: string): Promise<MirrorSuccess> => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), OVERPASS_TIMEOUT_MS);
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
+          'User-Agent': 'ScenicApp/1.0 (prototype; scenic-drives)',
+        },
+        body: new URLSearchParams({ data: query }).toString(),
+        signal: controller.signal,
+      });
 
-    for (const endpoint of OVERPASS_URLS) {
-      if (Date.now() - startedAt > OVERPASS_TOTAL_BUDGET_MS) {
-        lastError = new Error(
-          `Overpass budget exceeded (${OVERPASS_TOTAL_BUDGET_MS}ms) — falling back.`,
+      if (!response.ok) {
+        const bodyPreview = (await response.text()).slice(0, 240);
+        throw new Error(
+          `Overpass request failed (${response.status}) at ${endpoint}: ${bodyPreview}`,
         );
-        console.log('[Scenic places]', lastError.message);
-        break;
       }
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), OVERPASS_TIMEOUT_MS);
-
+      const raw = await response.text();
+      let data: OverpassResponse;
       try {
-        console.log(
-          '[Scenic places] trying Overpass mirror',
-          mode,
-          endpoint,
+        data = JSON.parse(raw) as OverpassResponse;
+      } catch (parseError) {
+        throw new Error(
+          `Overpass JSON parsing failed at ${endpoint}: ${
+            parseError instanceof Error ? parseError.message : 'unknown'
+          }`,
         );
-
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            Accept: 'application/json',
-            'User-Agent': 'ScenicApp/1.0 (prototype; scenic-drives)',
-          },
-          body: new URLSearchParams({ data: query }).toString(),
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          const bodyPreview = (await response.text()).slice(0, 240);
-          throw new Error(
-            `Overpass request failed (${response.status}) at ${endpoint}: ${bodyPreview}`,
-          );
-        }
-
-        const raw = await response.text();
-        let data: OverpassResponse;
-        try {
-          data = JSON.parse(raw) as OverpassResponse;
-        } catch (parseError) {
-          console.log(
-            '[Scenic places] JSON parsing failed',
-            endpoint,
-            parseError instanceof Error ? parseError.message : parseError,
-            raw.slice(0, 400),
-          );
-          throw new Error(
-            `Overpass JSON parsing failed at ${endpoint}: ${
-              parseError instanceof Error ? parseError.message : 'unknown'
-            }`,
-          );
-        }
-
-        const elements = data.elements ?? [];
-        if (elements.length === 0) {
-          sawSuccessfulEmpty = true;
-          console.log(
-            '[Scenic places] Overpass returned 0 elements',
-            mode,
-            endpoint,
-          );
-          lastError = new Error(`Overpass returned no places (${endpoint}).`);
-          continue;
-        }
-
-        const normalized = elements
-          .map(normalizeElement)
-          .filter((place): place is ScenicDestination => place != null);
-        const deduped = dedupePlaces(normalized);
-        const filtered = deduped
-          .filter((place) => {
-            const km = distanceKm(input.origin, place.coordinate);
-            return km >= MIN_DISTANCE_KM && km <= window.maxStraightLineKm;
-          })
-          .slice(0, MAX_USEFUL_CANDIDATES);
-
-        const debug = emptyDebug(input, {
-          rawElementCount: elements.length,
-          normalizedCount: normalized.length,
-          afterDedupeCount: deduped.length,
-          afterGeoFilterCount: filtered.length,
-          endpointUsed: `${endpoint} (${mode})`,
-        });
-
-        console.log('[Scenic places] pipeline counts', {
-          mode,
-          raw: debug.rawElementCount,
-          normalized: debug.normalizedCount,
-          afterDedupe: debug.afterDedupeCount,
-          afterGeoFilter: debug.afterGeoFilterCount,
-        });
-
-        if (__DEV__) {
-          for (const place of filtered) {
-            console.log(
-              '[Scenic places] candidate',
-              place.name,
-              `${distanceKm(input.origin, place.coordinate).toFixed(1)} km`,
-              place.category,
-            );
-          }
-        }
-
-        placesCache.set(key, {
-          expiresAt: Date.now() + CACHE_TTL_MS,
-          places: filtered,
-          debug,
-        });
-
-        return { places: filtered, debug };
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          lastError = new Error(
-            `Overpass timed out after ${OVERPASS_TIMEOUT_MS}ms (${endpoint}, ${mode}).`,
-          );
-        } else {
-          lastError =
-            error instanceof Error
-              ? error
-              : new Error('Unable to search nearby places right now.');
-        }
-        // Use console.log (not console.error) for expected mirror failures so
-        // Expo LogBox does not interrupt discovery while we try the next mirror.
-        console.log(
-          '[Scenic places] Overpass mirror unavailable',
-          mode,
-          endpoint,
-          lastError.message,
-        );
-      } finally {
-        clearTimeout(timeout);
       }
+
+      const elements = data.elements ?? [];
+      if (elements.length === 0) {
+        throw new Error(`Overpass returned no places (${endpoint}).`);
+      }
+
+      console.log(
+        '[Scenic places] mirror hit',
+        endpoint,
+        `${elements.length} elements`,
+      );
+      return { endpoint, elements };
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.name === 'AbortError'
+            ? `Overpass timed out after ${OVERPASS_TIMEOUT_MS}ms (${endpoint})`
+            : error.message
+          : 'Overpass mirror failed';
+      console.log('[Scenic places] Overpass mirror unavailable', message);
+      throw new Error(message);
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+
+  let winner: MirrorSuccess;
+  try {
+    console.log('[Scenic places] racing mirrors', mode, OVERPASS_URLS.length);
+    winner = await Promise.any(OVERPASS_URLS.map((url) => fetchMirror(url)));
+  } catch (error) {
+    const message =
+      error instanceof AggregateError
+        ? error.errors
+            .map((item) => (item instanceof Error ? item.message : String(item)))
+            .join(' | ')
+        : error instanceof Error
+          ? error.message
+          : 'Unable to search nearby places right now.';
+    console.log('[Scenic places] Overpass failed completely', message);
+
+    // Distinguish "all empty" from hard failures when possible.
+    if (message.includes('returned no places')) {
+      const debug = emptyDebug(input, {
+        overpassError: null,
+        endpointUsed: OVERPASS_URLS[0],
+      });
+      return { places: [], debug };
     }
 
-    if (lastError?.message.includes('budget exceeded')) {
-      break;
+    throw new Error(message);
+  }
+
+  const normalized = winner.elements
+    .map(normalizeElement)
+    .filter((place): place is ScenicDestination => place != null);
+  const deduped = dedupePlaces(normalized);
+  const filtered = deduped
+    .filter((place) => {
+      const km = distanceKm(input.origin, place.coordinate);
+      return km >= MIN_DISTANCE_KM && km <= window.maxStraightLineKm;
+    })
+    .slice(0, MAX_USEFUL_CANDIDATES);
+
+  const debug = emptyDebug(input, {
+    rawElementCount: winner.elements.length,
+    normalizedCount: normalized.length,
+    afterDedupeCount: deduped.length,
+    afterGeoFilterCount: filtered.length,
+    endpointUsed: `${winner.endpoint} (${mode})`,
+  });
+
+  console.log('[Scenic places] pipeline counts', {
+    mode,
+    endpoint: winner.endpoint,
+    raw: debug.rawElementCount,
+    normalized: debug.normalizedCount,
+    afterDedupe: debug.afterDedupeCount,
+    afterGeoFilter: debug.afterGeoFilterCount,
+  });
+
+  if (__DEV__) {
+    for (const place of filtered) {
+      console.log(
+        '[Scenic places] candidate',
+        place.name,
+        `${distanceKm(input.origin, place.coordinate).toFixed(1)} km`,
+        place.category,
+      );
     }
   }
 
-  // All mirrors returned successful-but-empty responses.
-  if (sawSuccessfulEmpty && lastError?.message.includes('returned no places')) {
-    const debug = emptyDebug(input, {
-      overpassError: null,
-      endpointUsed: OVERPASS_URLS[OVERPASS_URLS.length - 1],
-    });
-    console.log('[Scenic places] all mirrors empty — returning 0 places');
-    return { places: [], debug };
-  }
+  placesCache.set(key, {
+    expiresAt: Date.now() + CACHE_TTL_MS,
+    places: filtered,
+    debug,
+  });
 
-  const message =
-    lastError?.message ?? 'Unable to search nearby places right now.';
-  console.log('[Scenic places] Overpass failed completely', message);
-  throw new Error(message);
+  return { places: filtered, debug };
 }

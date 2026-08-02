@@ -208,6 +208,17 @@ function finalScore(
   );
 }
 
+const BEARING_LABELS: Record<(typeof BEARING_DEGREES)[number], string> = {
+  0: 'North',
+  45: 'Northeast',
+  90: 'East',
+  135: 'Southeast',
+  180: 'South',
+  225: 'Southwest',
+  270: 'West',
+  315: 'Northwest',
+};
+
 function createBearingFallbackCandidates(
   origin: LatLng,
   durationId: DurationOption['id'],
@@ -216,14 +227,15 @@ function createBearingFallbackCandidates(
 
   return BEARING_DEGREES.map((bearing) => {
     const coordinate = pointAtBearing(origin, bearing, distance);
-    const name = `Bearing ${bearing}° (~${distance} km)`;
+    const label = BEARING_LABELS[bearing];
+    // Keep bearing in id for debug; show a plain stop name in the UI.
     return {
       id: `bearing-fallback-${bearing}`,
-      name,
+      name: `${label} turnaround`,
       coordinate,
       category: 'scenic' as const,
       vibes: ['views'],
-      shortDescription: `Temporary geographic probe at ${bearing}° for routing diagnostics.`,
+      shortDescription: `Temporary geographic probe at ${bearing}° (~${distance} km) for routing diagnostics.`,
       source: 'overpass' as const,
     };
   });
@@ -458,7 +470,7 @@ export async function discoverNearbyDrive(
 
   try {
     // Extra deadline so a hung mirror never blocks the bearing fallback.
-    const OVERPASS_DEADLINE_MS = 12_000;
+    const OVERPASS_DEADLINE_MS = 16_000;
     const fetched = await Promise.race([
       fetchNearbyScenicPlaces({
         origin: input.origin,
@@ -659,7 +671,7 @@ export async function discoverNearbyDrive(
 
   const title =
     chosen.source === 'bearing-fallback'
-      ? `Probe drive · ${chosen.destination.name}`
+      ? `Nearby loop · ${Math.round(chosen.durationMinutes)} min`
       : titleForDestination(
           chosen.destination.name,
           chosen.destination.category,
@@ -674,7 +686,7 @@ export async function discoverNearbyDrive(
       name: title,
       description:
         chosen.source === 'bearing-fallback'
-          ? 'Temporary geographic probe used to verify routing. Remove bearing fallback once OSM discovery is reliable.'
+          ? 'A nearby out-and-back while Scenic looks up local places. Open the debug panel for probe details.'
           : chosen.destination.shortDescription,
       vibeIds:
         effectiveVibe !== 'surprise'
