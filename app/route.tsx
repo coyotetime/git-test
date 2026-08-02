@@ -21,7 +21,8 @@ import { colors, spacing, typography } from '@/constants/theme';
 export default function RouteResultScreen() {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const mapHeight = Math.round(height * 0.4);
+  const isCompact = height < 740;
+  const mapHeight = Math.round(height * (isCompact ? 0.32 : 0.38));
   const route = SAMPLE_ROUTE;
 
   return (
@@ -35,10 +36,7 @@ export default function RouteResultScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: insets.bottom + spacing.lg },
-        ]}
+        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.details}>
@@ -56,12 +54,17 @@ export default function RouteResultScreen() {
           <SectionHeading>Along the way</SectionHeading>
           <StopList stops={route.stops} />
         </View>
-
-        <View style={styles.actions}>
-          <PrimaryButton label="Start drive" onPress={() => {}} />
-          <SecondaryButton label="Save" onPress={() => {}} />
-        </View>
       </ScrollView>
+
+      <View
+        style={[
+          styles.footer,
+          { paddingBottom: Math.max(insets.bottom, spacing.md) },
+        ]}
+      >
+        <PrimaryButton label="Start drive" onPress={() => {}} />
+        <SecondaryButton label="Save" onPress={() => {}} />
+      </View>
     </View>
   );
 }
@@ -83,10 +86,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    flexGrow: 1,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-    gap: spacing.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    gap: spacing.lg,
   },
   details: {
     gap: spacing.md,
@@ -110,9 +113,12 @@ const styles = StyleSheet.create({
   stopsSection: {
     gap: spacing.md,
   },
-  actions: {
-    marginTop: 'auto',
-    gap: spacing.xs,
+  footer: {
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
+    gap: spacing.xs,
+    backgroundColor: colors.background,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(28, 26, 23, 0.06)',
   },
 });
