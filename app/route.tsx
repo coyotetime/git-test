@@ -137,7 +137,7 @@ export default function RouteResultScreen() {
         err instanceof Error
           ? err.message
           : 'Something went wrong while searching nearby.';
-      console.error('[Scenic UI] discovery threw', err);
+      console.log('[Scenic UI] discovery threw', err instanceof Error ? err.message : err);
       setDiscoveredDrive(null);
       setDiscoveryFailed(true);
       setDiscoveryReason('overpass_error');
