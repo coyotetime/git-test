@@ -75,7 +75,10 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.header}>
-          <Text style={styles.brand}>Scenic</Text>
+          <View style={styles.brandStamp} accessibilityRole="header">
+            <Text style={styles.brandStampMeta}>{`REV / MARK`}</Text>
+            <Text style={styles.brand}>Scenic</Text>
+          </View>
           <View style={styles.accentRule} />
           <Text style={styles.heading}>Where do you feel like going?</Text>
         </View>
@@ -140,13 +143,29 @@ const styles = StyleSheet.create({
   header: {
     gap: spacing.md,
   },
+  brandStamp: {
+    alignSelf: 'stretch',
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    gap: spacing.xs,
+  },
+  brandStampMeta: {
+    ...typography.section,
+    color: colors.accent,
+  },
   brand: {
     ...typography.brand,
+    fontSize: 64,
+    lineHeight: 56,
+    letterSpacing: -2.8,
     color: colors.text,
   },
   accentRule: {
-    height: 6,
-    width: 72,
+    height: 8,
+    width: 96,
     backgroundColor: colors.accent,
   },
   heading: {
